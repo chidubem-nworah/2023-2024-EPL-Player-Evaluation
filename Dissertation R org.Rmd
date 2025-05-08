@@ -1,0 +1,3283 @@
+---
+title: "CS5500"
+author: "Henry Nworah"
+date: "2024-07-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+#install.packages("")
+```
+
+```{r}
+library(plyr)
+library(dplyr)
+library(stringr)
+library(purrr)
+library(mclust)
+library(GA)
+library(ggplot2)
+library(ellipse)
+library(reshape2)
+library(pheatmap)
+library(tidyr)
+library(stats)
+library(MASS)
+```
+
+```{r}
+
+```
+
+Reading the Player Statistic Files for the 2023-2024 EPL season
+
+```{r}
+setwd("C:/Users/CNHenry/Desktop/Guide Notes/Dissertation/Datasets/23-24")
+AdvGk.23.24 <- read.csv("Advanced Goalkeeping 23-24.csv")
+DefAc.23.24 <- read.csv("Defensive Actions 23-24.csv")
+GSC.23.24 <- read.csv("Goal and Shot Creation 23-24.csv")
+Gk.23.24 <- read.csv("Goalkeeping 23-24.csv")
+MiscSt.23.24 <- read.csv("Miscellaneous Stats 23-24.csv")
+PasTy.23.24 <- read.csv("Pass Types 23-24.csv")
+Pas.23.24 <- read.csv("Passing 23-24.csv")
+PlaTi.23.24 <- read.csv("Playing Time 23-24.csv")
+Poss.23.24 <- read.csv("Possession 23-24.csv")
+Sho.23.24 <- read.csv("Shooting 23-24.csv")
+Sta.23.24 <- read.csv("Standard Stats 23-24.csv")
+```
+
+Renaming the Save. and Save..1 variables appropriately
+
+```{r}
+names(Gk.23.24)[names(Gk.23.24) == "Save."] <- "Save Rate"
+names(Gk.23.24)[names(Gk.23.24) == "Save..1"] <- "PKSave Rate"
+```
+
+Final Goalkeeping dataframe
+
+```{r}
+# Join dataframes by columns
+GK.23.24 <- merge(Gk.23.24, AdvGk.23.24, all = TRUE)
+```
+
+Standard Statistics variable adjustment
+
+```{r}
+Sta.23.24 <- Sta.23.24 %>%
+  rename_with(~ str_replace(., "\\.1$", " per 90"))
+names(Sta.23.24)[names(Sta.23.24) == "G.A.PK"] <- "G.A.PK per 90"
+names(Sta.23.24)[names(Sta.23.24) == "xG.xAG"] <- "xG.xAG per 90"
+```
+
+Shooting Variable adjustment
+
+```{r}
+names(Sho.23.24)[names(Sho.23.24) == "SoT."] <- "SoT Rate"
+names(Sho.23.24)[names(Sho.23.24) == "FK"] <- "FK Shot attempts"
+names(Sho.23.24)[names(Sho.23.24) == "Dist"] <- "Avg Shot Dist"
+```
+
+Passing Variable adjustment
+
+```{r}
+names(Pas.23.24)[names(Pas.23.24) == "Cmp."] <- "Cmp Rate"
+names(Pas.23.24)[names(Pas.23.24) == "Cmp.1"] <- "Short Cmp"
+names(Pas.23.24)[names(Pas.23.24) == "Att.1"] <- "Short Att"
+names(Pas.23.24)[names(Pas.23.24) == "Cmp..1"] <- "Short Cmp Rate"
+names(Pas.23.24)[names(Pas.23.24) == "Cmp.2"] <- "Medium Cmp"
+names(Pas.23.24)[names(Pas.23.24) == "Att.2"] <- "Medium Att"
+names(Pas.23.24)[names(Pas.23.24) == "Cmp..2"] <- "Medium Cmp Rate"
+names(Pas.23.24)[names(Pas.23.24) == "Cmp.3"] <- "Long Cmp"
+names(Pas.23.24)[names(Pas.23.24) == "Att.3"] <- "Long Att"
+names(Pas.23.24)[names(Pas.23.24) == "Cmp..3"] <- "Long Cmp Rate"
+```
+
+```{r}
+names(Pas.23.24)[names(Pas.23.24) == "Att"] <- "Passes Att"
+names(Pas.23.24)[names(Pas.23.24) == "TotDist"] <- "Total Pass Dist"
+names(Pas.23.24)[names(Pas.23.24) == "PrgDist"] <- "Prg Pass Dist"
+names(Pas.23.24)[names(Pas.23.24) == "X01.Mar"] <- "Final Third Pass"
+```
+
+Pass Types Variable adjustment
+
+```{r}
+names(PasTy.23.24)[names(PasTy.23.24) == "FK"] <- "FK Pass attempts"
+names(PasTy.23.24)[names(PasTy.23.24) == "Live"] <- "Live Pass"
+names(PasTy.23.24)[names(PasTy.23.24) == "Off"] <- "Off Pass"
+names(PasTy.23.24)[names(PasTy.23.24) == "Blocks"] <- "Blocked Pass"
+```
+
+Goal and Shot Creation Variable adjustment
+
+```{r}
+GSC.23.24 <- GSC.23.24 %>%
+  rename_with(~ str_replace(., "\\.1$", " GCA"))
+names(GSC.23.24)[names(GSC.23.24) == "PassLive"] <- "PassLive SCA"
+names(GSC.23.24)[names(GSC.23.24) == "PassDead"] <- "PassDead SCA"
+names(GSC.23.24)[names(GSC.23.24) == "TO"] <- "Take ons SCA"
+names(GSC.23.24)[names(GSC.23.24) == "Sh"] <- "Shot SCA"
+names(GSC.23.24)[names(GSC.23.24) == "Fld"] <- "Fouled SCA"
+names(GSC.23.24)[names(GSC.23.24) == "Def"] <- "Def SCA"
+```
+
+Defensive Actions Variable adjustment
+
+```{r}
+names(DefAc.23.24)[names(DefAc.23.24) == "Tkl.1"] <- "Tkl dribble"
+names(DefAc.23.24)[names(DefAc.23.24) == "Tkl."] <- "Tkl dribble Rate"
+names(DefAc.23.24)[names(DefAc.23.24) == "Blocks"] <- "Total Blocks"
+names(DefAc.23.24)[names(DefAc.23.24) == "Sh"] <- "Shots Blocked"
+names(DefAc.23.24)[names(DefAc.23.24) == "Pass"] <- "Passes Blocked"
+```
+
+```{r}
+names(DefAc.23.24)[names(DefAc.23.24) == "Att"] <- "Tkl dribble att"
+names(DefAc.23.24)[names(DefAc.23.24) == "Def.3rd"] <- "Def Third Tkl"
+names(DefAc.23.24)[names(DefAc.23.24) == "Mid.3rd"] <- "Mid Third Tkl"
+names(DefAc.23.24)[names(DefAc.23.24) == "Att.3rd"] <- "Att Third Tkl"
+names(DefAc.23.24)[names(DefAc.23.24) == "Lost"] <- "Tkl dribble Fail"
+```
+
+Possession Variable adjustment
+
+```{r}
+names(Poss.23.24)[names(Poss.23.24) == "Succ."] <- "Succ Rate"
+names(Poss.23.24)[names(Poss.23.24) == "Tkld."] <- "Tkld Rate"
+names(Poss.23.24)[names(Poss.23.24) == "Att"] <- "Att Take ons"
+names(Poss.23.24)[names(Poss.23.24) == "Succ"] <- "Succ Take ons"
+names(Poss.23.24)[names(Poss.23.24) == "Succ Rate"] <- "Succ Take ons Rate"
+```
+
+```{r}
+names(Poss.23.24)[names(Poss.23.24) == "TotDist"] <- "Total Carry Dist"
+names(Poss.23.24)[names(Poss.23.24) == "PrgDist"] <- "Prg Carry Dist"
+names(Poss.23.24)[names(Poss.23.24) == "X01.Mar"] <- "Final Third Carry"
+names(Poss.23.24)[names(Poss.23.24) == "Live"] <- "Live Touch"
+names(Poss.23.24)[names(Poss.23.24) == "Def.3rd"] <- "Def Third Touch"
+names(Poss.23.24)[names(Poss.23.24) == "Mid.3rd"] <- "Mid Third Touch"
+names(Poss.23.24)[names(Poss.23.24) == "Att.3rd"] <- "Att Third Touch"
+names(Poss.23.24)[names(Poss.23.24) == "Def.Pen"] <- "Def Pen Touch"
+names(Poss.23.24)[names(Poss.23.24) == "Att.Pen"] <- "Att Pen Touch"
+```
+
+Miscellaneous Stats Variable adjustment
+
+```{r}
+names(MiscSt.23.24)[names(MiscSt.23.24) == "Won."] <- "Won Rate"
+names(MiscSt.23.24)[names(MiscSt.23.24) == "Won"] <- "Aerial Won"
+names(MiscSt.23.24)[names(MiscSt.23.24) == "Lost"] <- "Aerial Lost"
+names(MiscSt.23.24)[names(MiscSt.23.24) == "Won Rate"] <- "Aerial Won Rate"
+```
+
+Goalkeeping Variable adjustment
+
+```{r}
+names(GK.23.24)[names(GK.23.24) == "PKatt"] <- "PK Faced"
+names(GK.23.24)[names(GK.23.24) == "FK"] <- "FK Conceded"
+names(GK.23.24)[names(GK.23.24) == "Cmp"] <- "Launched Pass Completed"
+names(GK.23.24)[names(GK.23.24) == "Cmp."] <- "Launched Pass Completed Rate"
+names(GK.23.24)[names(GK.23.24) == "Att"] <- "Launched Pass Att"
+names(GK.23.24)[names(GK.23.24) == "Att.1"] <- "GK Att"
+names(GK.23.24)[names(GK.23.24) == "CK"] <- "CK Conceded"
+```
+
+Combining stats for ALL players with notable game time
+
+```{r}
+a.23.24 <- merge(Sta.23.24, Sho.23.24)
+```
+
+```{r}
+
+Poss.23.24 <- Poss.23.24[, !(names(Poss.23.24) %in% "Matches")]
+
+MiscSt.23.24 <- MiscSt.23.24[, !(names(MiscSt.23.24) %in% "Matches")]
+```
+
+```{r}
+#a.23.24[580, ]
+a.23.24 <- a.23.24[1:580, ]
+b.23.24 <- merge(a.23.24, Pas.23.24)
+c.23.24 <- merge(b.23.24, PasTy.23.24)
+d.23.24 <- merge(c.23.24, GSC.23.24)
+e.23.24 <- merge(d.23.24, DefAc.23.24)
+e.23.24 <- e.23.24[, !(names(e.23.24) %in% "Matches")]
+f.23.24 <- merge(e.23.24, Poss.23.24)
+all.23.24 <- merge(f.23.24, MiscSt.23.24)
+```
+
+```{r}
+All2.23.24 <- merge(all.23.24, PlaTi.23.24)
+```
+
+```{r}
+all.23.24$Min <- as.numeric(gsub(",", "", all.23.24$Min))
+```
+
+Taking out players with less than 200 minutes of total playtime
+
+```{r}
+clus.23.24 <- all.23.24 %>%
+  filter(Min >= 200)
+```
+
+DATA PREP & CLEANING
+
+```{r}
+#Removing the Rk variable, which numbers players
+clus.23.24 <- clus.23.24[, !(names(clus.23.24) %in% "Rk")]
+```
+
+Inspecting variables
+
+```{r}
+summary(clus.23.24)
+```
+
+Ensuring all but the 1st 4 variables are numeric
+
+```{r}
+clus.23.24 <- clus.23.24 %>%
+  mutate_at(vars(-c(1:4)), as.numeric)
+```
+
+```{r}
+#Counting the NA values in the dataframe
+clus_count <- apply(is.na(clus.23.24), 2,sum)
+#clus_count
+
+#Calculating the percentage
+clus_per <- (round(clus_count/nrow(clus.23.24)*100,2))
+clus_per 
+```
+
+```{r}
+# Initialize empty vectors to store results
+na_vars <- c()
+na_percentages <- c()
+
+# Loop through columns to find NA values and calculate percentage
+for (col in names(clus.23.24)) {
+  na_count <- sum(is.na(clus.23.24[[col]]))
+  if (na_count > 0) {
+    na_vars <- c(na_vars, col)
+    na_percentage <- (na_count / nrow(clus.23.24)) * 100
+    na_percentages <- c(na_percentages, na_percentage)
+  }
+}
+
+# Combine results into a dataframe
+na_info <- data.frame(
+  Variable = na_vars,
+  NA_Percentage = na_percentages
+)
+
+# Print the result
+print(na_info)
+```
+
+```{r}
+subset_G_SoT_na <- subset(clus.23.24, is.na(G.SoT))
+```
+
+```{r}
+sum(is.na(subset_G_SoT_na$npxG.Sh) & subset_G_SoT_na$npxG == 0)
+```
+
+```{r}
+names(clus.23.24)[names(clus.23.24) == "Tkl dribble Rate"] <- "Tkl_dribble_Rate"
+subset_tkl_dr_R <- subset(clus.23.24, is.na(Tkl_dribble_Rate))
+```
+
+```{r}
+names(clus.23.24)[names(clus.23.24) == "Tkld Rate"] <- "Tkld_Rate"
+subset_tkld_R <- subset(clus.23.24, is.na(Tkld_Rate))
+```
+
+```{r}
+names(clus.23.24)[names(clus.23.24) == "Aerial Won Rate"] <- "Aerial_Won_Rate"
+subset_AW_R <- subset(clus.23.24, is.na(Aerial_Won_Rate))
+```
+
+```{r}
+names(clus.23.24)[names(clus.23.24) == "xAG per 90"] <- "xAG_per_90"
+names(clus.23.24)[names(clus.23.24) == "npxG per 90"] <- "npxG_per_90"
+names(clus.23.24)[names(clus.23.24) == "npxG.xAG per 90"] <- "npxG_xAG_per_90"
+names(clus.23.24)[names(clus.23.24) == "SoT Rate"] <- "SoT_Rate"
+names(clus.23.24)[names(clus.23.24) == "SoT.90"] <- "SoT_per_90"
+names(clus.23.24)[names(clus.23.24) == "Sh.90"] <- "Sh_per_90"
+names(clus.23.24)[names(clus.23.24) == "Avg Shot Dist"] <- "Avg_Shot_Dist"
+names(clus.23.24)[names(clus.23.24) == "npxG.Sh"] <- "npxG_per_Sh"
+names(clus.23.24)[names(clus.23.24) == "Passes Att"] <- "Passes_Att"
+names(clus.23.24)[names(clus.23.24) == "Total Pass Dist"] <- "Total_Pass_Dist"
+names(clus.23.24)[names(clus.23.24) == "Prg Pass Dist"] <- "Prg_Pass_Dist"
+names(clus.23.24)[names(clus.23.24) == "Short Att"] <- "Short_Att"
+names(clus.23.24)[names(clus.23.24) == "Medium Att"] <- "Medium_Att"
+names(clus.23.24)[names(clus.23.24) == "Long Att"] <- "Long_Att"
+names(clus.23.24)[names(clus.23.24) == "Live Pass"] <- "Live_Pass"
+names(clus.23.24)[names(clus.23.24) == "Off Pass"] <- "Off_Pass"
+names(clus.23.24)[names(clus.23.24) == "SCA90"] <- "SCA_per_90"
+names(clus.23.24)[names(clus.23.24) == "PassLive SCA"] <- "PassLive_SCA"
+names(clus.23.24)[names(clus.23.24) == "Shot SCA"] <- "Shot_SCA"
+names(clus.23.24)[names(clus.23.24) == "Take ons SCA"] <- "Take_ons_SCA"
+names(clus.23.24)[names(clus.23.24) == "Fouled SCA"] <- "Fouled_SCA"
+names(clus.23.24)[names(clus.23.24) == "Def SCA"] <- "Def_SCA"
+names(clus.23.24)[names(clus.23.24) == "Def Third Tkl"] <- "Def_3rd_Tkl"
+names(clus.23.24)[names(clus.23.24) == "Mid Third Tkl"] <- "Mid_3rd_Tkl"
+names(clus.23.24)[names(clus.23.24) == "Att Third Tkl"] <- "Att_3rd_Tkl"
+names(clus.23.24)[names(clus.23.24) == "Tkl dribble att"] <- "Tkl_drib_att"
+names(clus.23.24)[names(clus.23.24) == "Total Blocks"] <- "Tot_Blocks"
+names(clus.23.24)[names(clus.23.24) == "Shots Blocked"] <- "Sh_Blocked"
+names(clus.23.24)[names(clus.23.24) == "Passes Blocked"] <- "Pass_Blocked"
+names(clus.23.24)[names(clus.23.24) == "Tkl.Int"] <- "Tkl_Int"
+names(clus.23.24)[names(clus.23.24) == "Live Touch"] <- "Live_Touch"
+names(clus.23.24)[names(clus.23.24) == "Def Pen Touch"] <- "Def_P_Touch"
+names(clus.23.24)[names(clus.23.24) == "Def Third Touch"] <- "Def_3rd_Touch"
+names(clus.23.24)[names(clus.23.24) == "Mid Third Touch"] <- "Mid_3rd_Touch"
+names(clus.23.24)[names(clus.23.24) == "Att Third Touch"] <- "Att_3rd_Touch"
+names(clus.23.24)[names(clus.23.24) == "Att Pen Touch"] <- "Att_P_Touch"
+names(clus.23.24)[names(clus.23.24) == "Att Take ons"] <- "Att_Take_ons"
+names(clus.23.24)[names(clus.23.24) == "Total Carry Dist"] <- "Tot_Car_Dist"
+names(clus.23.24)[names(clus.23.24) == "Prg Carry Dist"] <- "Prg_Car_Dist"
+names(clus.23.24)[names(clus.23.24) == "Final Third Carry"] <- "Att_3rd_Car"
+names(clus.23.24)[names(clus.23.24) == "X2CrdY"] <- "CrdY_2"
+names(clus.23.24)[names(clus.23.24) == "Aerial Won"] <- "Aerial_W"
+```
+
+Sub issue handling
+
+```{r}
+sub_clus_23_24 <- clus.23.24[clus.23.24$Min / 180 < clus.23.24$Start, ]
+```
+
+*CLUSTERING* Retaining only the variables relevant to role clustering
+
+```{r}
+clus_df <- subset(clus.23.24, select = c(Player, X90s, PrgP, PrgR, PrgC, xAG_per_90, npxG_per_90, npxG_xAG_per_90, Sh_per_90, Avg_Shot_Dist, npxG_per_Sh, Total_Pass_Dist, Prg_Pass_Dist, Short_Att, Medium_Att, Long_Att, Live_Pass, Crs, Off_Pass, SCA_per_90, PassLive_SCA, Shot_SCA, Take_ons_SCA, Fouled_SCA, Def_SCA, Tkl, Def_3rd_Tkl, Mid_3rd_Tkl, Att_3rd_Tkl, Tkl_drib_att, Tot_Blocks, Sh_Blocked, Pass_Blocked, Int, Tkl_Int, Clr, Live_Touch, Def_P_Touch, Def_3rd_Touch, Mid_3rd_Touch, Att_3rd_Touch, Att_P_Touch, Att_Take_ons, Tkld, Carries, Tot_Car_Dist, Prg_Car_Dist, Att_3rd_Car, CPA, Rec, Fls, Fld, Off, PKwon, PKcon, Recov, Aerial_W))
+```
+
+```{r}
+sub_clus_df <- subset(sub_clus_23_24, select = c(Player, X90s, PrgP, PrgR, PrgC, xAG_per_90, npxG_per_90, npxG_xAG_per_90, Sh_per_90, Avg_Shot_Dist, npxG_per_Sh, Total_Pass_Dist, Prg_Pass_Dist, Short_Att, Medium_Att, Long_Att, Live_Pass, Crs, Off_Pass, SCA_per_90, PassLive_SCA, Shot_SCA, Take_ons_SCA, Fouled_SCA, Def_SCA, Tkl, Def_3rd_Tkl, Mid_3rd_Tkl, Att_3rd_Tkl, Tkl_drib_att, Tot_Blocks, Sh_Blocked, Pass_Blocked, Int, Tkl_Int, Clr, Live_Touch, Def_P_Touch, Def_3rd_Touch, Mid_3rd_Touch, Att_3rd_Touch, Att_P_Touch, Att_Take_ons, Tkld, Carries, Tot_Car_Dist, Prg_Car_Dist, Att_3rd_Car, CPA, Rec, Fls, Fld, Off, PKwon, PKcon, Recov, Aerial_W))
+```
+
+Redefining all absolute variables in per 90 format
+
+```{r}
+# Define the variables to be transformed
+variables <- c("PrgP", "PrgR", "PrgC", "Total_Pass_Dist", "Prg_Pass_Dist", 
+               "Short_Att", "Medium_Att", "Long_Att", "Live_Pass", "Crs", 
+               "Off_Pass", "PassLive_SCA", "Shot_SCA", "Take_ons_SCA", 
+               "Fouled_SCA", "Def_SCA", "Tkl", "Def_3rd_Tkl", "Mid_3rd_Tkl", 
+               "Att_3rd_Tkl", "Tkl_drib_att", "Tot_Blocks", "Sh_Blocked", 
+               "Pass_Blocked", "Int", "Tkl_Int", "Clr", "Live_Touch", 
+               "Def_P_Touch", "Def_3rd_Touch", "Mid_3rd_Touch", "Att_3rd_Touch", 
+               "Att_P_Touch", "Att_Take_ons", "Tkld", "Carries", "Tot_Car_Dist", 
+               "Prg_Car_Dist", "Att_3rd_Car", "CPA", "Rec", "Fls", "Fld", 
+               "Off", "PKwon", "PKcon", "Recov", "Aerial_W")
+```
+
+```{r}
+# Convert variables to numeric if they are not
+#clus_df$X90s <- as.numeric(clus_df$X90s)
+
+for (var in variables) {
+  clus_df[[var]] <- as.numeric(clus_df[[var]])
+}
+
+# Loop over each variable and perform the transformation
+for (var in variables) {
+  new_var <- paste0(var, "_per_90")
+  clus_df[[new_var]] <- round(clus_df[[var]] / clus_df$X90s, 3)
+}
+```
+
+```{r}
+# Remove the variables from the dataframe
+clus_df <- clus_df[, !names(clus_df) %in% variables]
+```
+
+```{r}
+#Removing the "X90s" variable as it is irrelevant to clustering
+clus_df <- clus_df[, !names(clus_df) %in% "X90s"]
+
+#Removing this variable as certain players have zero shots and taking them out will significantly minimize the number of available observations
+clus_df <- clus_df[, !names(clus_df) %in% "npxG_per_Sh"]
+
+#Reintroducing Player Position
+clus_df <- merge(clus_df, clus.23.24[, c("Player", "Pos")])
+```
+
+```{r}
+clus_df <- clus_df %>%
+  slice(-c(69, 71, 412, 414))
+```
+
+```{r}
+# Convert variables to numeric if they are not
+#clus_df$X90s <- as.numeric(clus_df$X90s)
+
+for (var in variables) {
+  sub_clus_df[[var]] <- as.numeric(sub_clus_df[[var]])
+}
+
+# Loop over each variable and perform the transformation
+for (var in variables) {
+  new_var <- paste0(var, "_per_90")
+  sub_clus_df[[new_var]] <- round(sub_clus_df[[var]] / sub_clus_df$X90s, 3)
+}
+```
+
+```{r}
+# Remove the variables from the dataframe
+sub_clus_df <- sub_clus_df[, !names(sub_clus_df) %in% variables]
+```
+
+```{r}
+#Removing the "X90s" variable as it is irrelevant to clustering
+sub_clus_df <- sub_clus_df[, !names(sub_clus_df) %in% "X90s"]
+
+#Removing this variable as certain players have zero shots and taking them out will significantly minimize the number of available observations
+sub_clus_df <- sub_clus_df[, !names(sub_clus_df) %in% "npxG_per_Sh"]
+
+#Reintroducing Player Position
+sub_clus_df <- merge(sub_clus_df, clus.23.24[, c("Player", "Pos")])
+```
+
+```{r}
+sub_clus_df <- sub_clus_df %>%
+  slice(-c(68, 70, 403, 405))
+```
+
+Removing the NA values
+
+```{r}
+sub_clus_df[is.na(sub_clus_df)] <- 0
+```
+
+*Subsetting the dataframe*
+
+```{r}
+rm(a.23.24,b.23.24,c.23.24,d.23.24,e.23.24,f.23.24,subset_AW_R,subset_tkl_dr_R,subset_tkld_R)
+
+# Subset for "GK"
+subset_GK_b <- sub_clus_df %>%
+  filter(grepl("GK", Pos))
+
+# Subset for "DF"
+subset_DF_b <- sub_clus_df %>%
+  filter(grepl("DF", Pos))
+
+# Subset for "MF"
+subset_MF_b <- sub_clus_df %>%
+  filter(grepl("MF", Pos))
+
+# Subset for "FW"
+subset_FW_b <- sub_clus_df %>%
+  filter(grepl("FW", Pos))
+```
+
+Removing the Player and Pos variable for Principal Component Analysis\`\`
+
+```{r}
+subset_FW_num_b <- subset_FW_b[, !names(subset_FW_b) %in% c("Player", "Pos")]
+subset_MF_num_b <- subset_MF_b[, !names(subset_MF_b) %in% c("Player", "Pos")]
+subset_DF_num_b <- subset_DF_b[, !names(subset_DF_b) %in% c("Player", "Pos")]
+subset_GK_num_b <- subset_GK_b[, !names(subset_GK_b) %in% c("Player", "Pos")]
+```
+
+*PCA* FW PCA Applying PCA to potentially reduce the number of variables and possibly simplify the supervised learning methods applied in the next stage
+
+```{r}
+set.seed(4)
+#Creating the PC object based on fhd.df numerical variables
+# The varaibles are scaled before PCA application
+pca_fw <- prcomp(subset_FW_num_b, center = T, scale. = T)
+
+#Variance of each Principal Component Variable
+pc_var_fw <- pca_fw$sdev^2
+
+#Proportion of explained variance
+PEV_fw <- pc_var_fw/sum(pc_var_fw)
+```
+
+Plotting the cumulative sum of explained variance proportions. We can take PC1 to PC5
+
+```{r}
+plot(cumsum(PEV_fw))
+abline(h=0.8)
+
+cumsum(PEV_fw)
+```
+
+```{r}
+pc_fw <- as.data.frame(pca_fw$x[,1:11])
+```
+
+```{r}
+pca_fw$rotation[,9]
+```
+
+```{r}
+# Initialize an empty list to store the plots
+fwplots <- list()
+
+# Loop through the first 11 principal components
+for (i in 1:11) {
+  # Extract loadings for the current principal component
+  fw_PC <- pca_fw$rotation[, i]
+  
+  # Filter loadings with absolute values >= 0.1
+  fws_PC <- fw_PC[abs(fw_PC) >= 0.1]
+  
+  # Create a data frame for plotting
+  dfws_PC <- data.frame(
+    variable = names(fws_PC),
+    loading = fws_PC
+  )
+  
+  # Create the bar plot
+  fwp <- ggplot(dfws_PC, aes(x = reorder(variable, loading), y = loading)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    coord_flip() +  # Flip coordinates for better readability
+    theme_minimal() +
+    labs(title = paste("Significant Loadings for Principal Component", i),
+         x = "Variable",
+         y = "Loading")
+  
+  # Store the plot in the list
+  fwplots[[i]] <- fwp
+}
+
+# Print the plots
+for (i in 1:11) {
+  print(fwplots[[i]])
+}
+
+```
+
+```{r}
+bic_values_fw <- mclustBIC(pc_fw[,1:6], modelNames = "VVV", G = 1:20)
+plot(bic_values_fw)
+```
+
+```{r}
+# Apply Gaussian Mixture Models (GMM) clustering
+gmm_fw <- Mclust(pc_fw[,1:6], G = 5, modelNames = "VVV")  # G = 2 specifies the number of clusters
+gmm_cluster_id_fw <- gmm_fw$classification  # Extract cluster assignments
+
+```
+
+1: Defensive non forwards 2: Creative forwards 3: Mobile Forwards 4: Box Forwards
+
+```{r}
+# Create a dataframe for plotting
+plot_data_FW <- data.frame(pc_fw[, 1:6], Cluster = factor(gmm_fw$classification))
+
+pc_pairs_FW <- list(c("PC1", "PC2"), c("PC3", "PC4"), c("PC5", "PC6"))
+
+for (pair in pc_pairs_FW) {
+  p <- ggplot(plot_data_FW, aes_string(x = pair[1], y = pair[2], color = "Cluster")) +
+    geom_point(size = 2) +
+    ggtitle(paste("Scatter Plot of", pair[1], "vs", pair[2], "with GMM Clusters")) +
+    theme_minimal()
+  
+  print(p)
+}
+```
+
+```{r}
+# Add cluster memberships to the original data
+subset_FW_num_b$cluster <- gmm_fw$classification
+```
+
+```{r}
+as.factor(subset_FW_num_b$cluster)
+```
+
+```{r}
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+```
+
+```{r}
+normal_FW <- as.data.frame(lapply(subset_FW_num_b[,1:54], normalize))
+```
+
+```{r}
+normal_FW$cluster <- subset_FW_num_b$cluster
+```
+
+```{r}
+FW_means <- as.data.frame(colMeans(normal_FW[,1:54]))
+```
+
+```{r}
+# Calculate the mean of each variable within each cluster
+cluster_FW_means <- normal_FW %>%
+  group_by(cluster) %>%
+  summarise(across(everything(), mean, .names = "mean_{col}")) %>%
+  pivot_longer(cols = starts_with("mean_"), names_to = "variable", values_to = "cluster_mean") %>%
+  mutate(variable = sub("mean_", "", variable)) %>%
+  pivot_wider(names_from = cluster, values_from = cluster_mean)
+```
+
+```{r}
+# Perform subtraction for each variable
+imp_FW <- cluster_FW_means %>%
+  # Subtract the FW_means_vector values from the cluster_means values
+  mutate(across(-variable, ~ . - FW_means))
+```
+
+```{r}
+normal_imp_FW <- as.data.frame(lapply(imp_FW[,2:6], normalize))
+```
+
+*MF* MF PCA Applying PCA to potentially reduce the number of variables and possibly simplify the supervised learning methods applied in the next stage
+
+```{r}
+#Creating the PC object based on fhd.df numerical variables
+# The varaibles are scaled before PCA application
+pca_mf <- prcomp(subset_MF_num_b, center = T, scale. = T)
+
+#Variance of each Principal Component Variable
+pc_var_mf <- pca_mf$sdev^2
+
+#Proportion of explained variance
+PEV_mf <- pc_var_mf/sum(pc_var_mf)
+```
+
+Plotting the cumulative sum of explained variance proportions. We can take PC1 to PC5
+
+```{r}
+plot(cumsum(PEV_mf))
+abline(h=0.8)
+
+cumsum(PEV_mf)
+```
+
+```{r}
+pc_mf <- as.data.frame(pca_mf$x[,1:10])
+```
+
+```{r}
+# Initialize an empty list to store the plots
+mfplots <- list()
+
+# Loop through the first 11 principal components
+for (i in 1:10) {
+  # Extract loadings for the current principal component
+  mf_PC <- pca_mf$rotation[, i]
+  
+  # Filter loadings with absolute values >= 0.1
+  mfs_PC <- mf_PC[abs(mf_PC) >= 0.1]
+  
+  # Create a data frame for plotting
+  dmfs_PC <- data.frame(
+    variable = names(mfs_PC),
+    loading = mfs_PC
+  )
+  
+  # Create the bar plot
+  mfp <- ggplot(dmfs_PC, aes(x = reorder(variable, loading), y = loading)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    coord_flip() +  # Flip coordinates for better readability
+    theme_minimal() +
+    labs(title = paste("Significant Loadings for Principal Component", i),
+         x = "Variable",
+         y = "Loading")
+  
+  # Store the plot in the list
+  mfplots[[i]] <- mfp
+}
+
+# Print the plots
+for (i in 1:10) {
+  print(mfplots[[i]])
+}
+
+```
+
+```{r}
+bic_values_mf <- mclustBIC(pc_mf[,1:7], modelNames = "VVV", G = 1:20)
+plot(bic_values_mf)
+```
+
+```{r}
+# Apply Gaussian Mixture Models (GMM) clustering
+gmm_mf <- Mclust(pc_mf[,1:7], G = 7, modelNames = "VVV")  # G = 2 specifies the number of clusters
+gmm_cluster_id_mf <- gmm_mf$classification  # Extract cluster assignments
+
+```
+
+```{r}
+# Create a dataframe for plotting
+plot_data_MF <- data.frame(pc_mf[, 1:7], Cluster = factor(gmm_mf$classification))
+
+pc_pairs_MF <- list(c("PC1", "PC2"), c("PC3", "PC4"), c("PC5", "PC6"), c("PC6", "PC7"))
+
+for (pair in pc_pairs_MF) {
+  p <- ggplot(plot_data_MF, aes_string(x = pair[1], y = pair[2], color = "Cluster")) +
+    geom_point(size = 2) +
+    ggtitle(paste("Scatter Plot of", pair[1], "vs", pair[2], "with GMM Clusters")) +
+    theme_minimal()
+  
+  print(p)
+}
+```
+
+```{r}
+# Add cluster memberships to the original data
+subset_MF_num_b$cluster <- gmm_mf$classification
+```
+
+```{r}
+as.factor(subset_MF_num_b$cluster)
+```
+
+```{r}
+normal_MF <- as.data.frame(lapply(subset_MF_num_b[,1:54], normalize))
+```
+
+```{r}
+normal_MF$cluster <- subset_MF_num_b$cluster
+```
+
+```{r}
+MF_means <- as.data.frame(colMeans(normal_MF[,1:54]))
+```
+
+```{r}
+# Calculate the mean of each variable within each cluster
+cluster_MF_means <- normal_MF %>%
+  group_by(cluster) %>%
+  summarise(across(everything(), mean, .names = "mean_{col}")) %>%
+  pivot_longer(cols = starts_with("mean_"), names_to = "variable", values_to = "cluster_mean") %>%
+  mutate(variable = sub("mean_", "", variable)) %>%
+  pivot_wider(names_from = cluster, values_from = cluster_mean)
+```
+
+```{r}
+# Perform subtraction for each variable
+imp_MF <- cluster_MF_means %>%
+  # Subtract the FW_means_vector values from the cluster_means values
+  mutate(across(-variable, ~ . - MF_means))
+```
+
+```{r}
+normal_imp_MF <- as.data.frame(lapply(imp_MF[,2:8], normalize))
+```
+
+1: Box to box/functional midfielders 2: Secondary Forwards 3: Deeper Playmakers 4: Ball Winners (width covering?) 5: Creative Winger 6: Box to box ball Winners 7: Advanced Playmakers 8: Advanced Dribblers
+
+7.  Versatile Middle Playmakers 8: Advanced Playmakers 9: Advanced Dribblers 10: Anchor men/Defenders
+
+```{r}
+gmm_mf2$z[c(46,51),]
+```
+
+```{r}
+# Function to print GMM parameters
+print_gmm_parameters <- function(gmm_model) {
+  for (cluster_id in 1:gmm_model$G) {
+    cat("Cluster", cluster_id, "parameters:\n")
+    
+    # Mean vector
+    cat("Mean vector:\n")
+    print(gmm_model$parameters$mean[, cluster_id])
+    
+    # Covariance matrix
+    cat("Covariance matrix:\n")
+    print(gmm_model$parameters$variance$sigma[, , cluster_id])
+    
+    cat("\n")
+  }
+}
+
+# Print the parameters of the fitted GMM
+print_gmm_parameters(gmm_fw)
+```
+
+```{r}
+# Function to create ellipses based on covariance matrices
+create_ellipse <- function(mean, cov_matrix, level = 0.95) {
+  ell <- ellipse::ellipse(cov_matrix, centre = mean, level = level)
+  colnames(ell) <- c("V1", "V2")
+  data.frame(ell)
+}
+
+# Add ellipses to the scatter plot
+ggplot(plot_data, aes(x = PC1, y = PC2, color = Cluster)) +
+  geom_point(size = 2) +
+  ggtitle("Scatter Plot of First Two Principal Components with GMM Clusters and Covariance Ellipses") +
+  theme_minimal() +
+  # Add ellipses for each cluster
+  lapply(1:4, function(cluster_id) {
+    mean_vector <- gmm_fw2$parameters$mean[1:2, cluster_id]
+    cov_matrix <- gmm_fw2$parameters$variance$sigma[1:2, 1:2, cluster_id]
+    ellipse_data <- create_ellipse(mean_vector, cov_matrix)
+    geom_path(data = ellipse_data, aes(x = V1, y = V2), color = scales::hue_pal()(4)[cluster_id])
+  })
+
+```
+
+*PCA DF* FW PCA Applying PCA to potentially reduce the number of variables and possibly simplify the supervised learning methods applied in the next stage
+
+```{r}
+#Creating the PC object based on fhd.df numerical variables
+# The varaibles are scaled before PCA application
+pca_df <- prcomp(subset_DF_num_b, center = T, scale. = T)
+
+#Variance of each Principal Component Variable
+pc_var_df <- pca_df$sdev^2
+
+#Proportion of explained variance
+PEV_df <- pc_var_df/sum(pc_var_df)
+```
+
+Plotting the cumulative sum of explained variance proportions. We can take PC1 to PC5
+
+```{r}
+plot(cumsum(PEV_df))
+abline(h=0.8)
+
+cumsum(PEV_df)
+```
+
+```{r}
+pc_df <- as.data.frame(pca_df$x[,1:11])
+```
+
+```{r}
+# Initialize an empty list to store the plots
+dfplots <- list()
+
+# Loop through the first 11 principal components
+for (i in 1:11) {
+  # Extract loadings for the current principal component
+  df_PC <- pca_df$rotation[, i]
+  
+  # Filter loadings with absolute values >= 0.1
+  dfs_PC <- df_PC[abs(df_PC) >= 0.1]
+  
+  # Create a data frame for plotting
+  ddfs_PC <- data.frame(
+    variable = names(dfs_PC),
+    loading = dfs_PC
+  )
+  
+  # Create the bar plot
+  dfp <- ggplot(ddfs_PC, aes(x = reorder(variable, loading), y = loading)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    coord_flip() +  # Flip coordinates for better readability
+    theme_minimal() +
+    labs(title = paste("Significant Loadings for Principal Component", i),
+         x = "Variable",
+         y = "Loading")
+  
+  # Store the plot in the list
+  dfplots[[i]] <- dfp
+}
+
+# Print the plots
+for (i in 1:11) {
+  print(dfplots[[i]])
+}
+
+```
+
+```{r}
+bic_values_df <- mclustBIC(pc_df[,1:6], modelNames = "VVV", G = 1:20)
+plot(bic_values_df)
+```
+
+```{r}
+# Apply Gaussian Mixture Models (GMM) clustering
+gmm_df <- Mclust(pc_df[,1:6], G = 7, modelNames = "VVV")  # G = 2 specifies the number of clusters
+gmm_cluster_id_df <- gmm_df$classification  # Extract cluster assignments
+
+```
+
+```{r}
+gmm_df2$z[54,]
+```
+
+```{r}
+# Create a dataframe for plotting
+plot_data_DF <- data.frame(pc_df[, 1:6], Cluster = factor(gmm_df$classification))
+
+pc_pairs_DF <- list(c("PC1", "PC2"), c("PC3", "PC4"), c("PC5", "PC6"))
+
+for (pair in pc_pairs_DF) {
+  p <- ggplot(plot_data_DF, aes_string(x = pair[1], y = pair[2], color = "Cluster")) +
+    geom_point(size = 2) +
+    ggtitle(paste("Scatter Plot of", pair[1], "vs", pair[2], "with GMM Clusters")) +
+    theme_minimal()
+  
+  print(p)
+}
+```
+
+```{r}
+# Add cluster memberships to the original data
+subset_DF_num_b$cluster <- gmm_df$classification
+```
+
+```{r}
+as.factor(subset_DF_num_b$cluster)
+```
+
+```{r}
+normal_DF <- as.data.frame(lapply(subset_DF_num_b[,1:54], normalize))
+```
+
+```{r}
+normal_DF$cluster <- subset_DF_num_b$cluster
+```
+
+```{r}
+DF_means <- as.data.frame(colMeans(normal_DF[,1:54]))
+```
+
+```{r}
+# Calculate the mean of each variable within each cluster
+cluster_DF_means <- normal_DF %>%
+  group_by(cluster) %>%
+  summarise(across(everything(), mean, .names = "mean_{col}")) %>%
+  pivot_longer(cols = starts_with("mean_"), names_to = "variable", values_to = "cluster_mean") %>%
+  mutate(variable = sub("mean_", "", variable)) %>%
+  pivot_wider(names_from = cluster, values_from = cluster_mean)
+```
+
+```{r}
+# Perform subtraction for each variable
+imp_DF <- cluster_DF_means %>%
+  # Subtract the FW_means_vector values from the cluster_means values
+  mutate(across(-variable, ~ . - DF_means))
+```
+
+```{r}
+normal_imp_DF <- as.data.frame(lapply(imp_DF[,2:8], normalize))
+```
+
+```{r}
+# Create a list to store the subset dataframes
+cluster_subsets <- list()
+
+# Loop through each cluster id (1 to 9)
+for (cluster_id in 1:10) {
+  # Subset the original data based on the cluster assignments
+  cluster_subset <- subset_DF_b[gmm_df$classification == cluster_id, ]
+  #cluster_subset <- subset_MF_b[k_mf$cluster == cluster_id, ]
+  
+  # Store the subset dataframe in the list
+  cluster_subsets[[cluster_id]] <- cluster_subset
+}
+
+# Print the first few rows of each subset dataframe to verify
+for (i in 1:10) {
+  cat("Cluster", i, "subset:\n")
+  print(head(cluster_subsets[[i]]))
+  cat("\n")
+}
+```
+
+```{r}
+cluster_subsets[[2]]
+```
+
+*PERFORMANCE EVALUATION* Returning to the larger dataset, all variables relevant to Performance Evaluation will be named appropriately
+
+```{r}
+names(all.23.24)[names(all.23.24) == "X2CrdY"] <- "Crd2Y"
+names(all.23.24)[names(all.23.24) == "Prg Carry Dist"] <- "Prg_Carry_Dist"
+names(all.23.24)[names(all.23.24) == "Final Third Carry"] <- "Final_Third_Carry"
+names(all.23.24)[names(all.23.24) == "G.PK per 90"] <- "G_PK_per_90"
+names(all.23.24)[names(all.23.24) == "G.Sh"] <- "G_Sh"
+names(all.23.24)[names(all.23.24) == "G.SoT"] <- "G_SoT"
+names(all.23.24)[names(all.23.24) == "np.G.xG"] <- "npG_npxG"
+names(all.23.24)[names(all.23.24) == "xAG per 90"] <- "xAG_per_90"
+names(all.23.24)[names(all.23.24) == "PassLive SCA"] <- "PassLive_SCA"
+names(all.23.24)[names(all.23.24) == "Take ons SCA"] <- "Take_ons_SCA"
+names(all.23.24)[names(all.23.24) == "Shot SCA"] <- "Shot_SCA"
+names(all.23.24)[names(all.23.24) == "Fouled SCA"] <- "Fouled_SCA"
+names(all.23.24)[names(all.23.24) == "Def SCA"] <- "Def_SCA"
+names(all.23.24)[names(all.23.24) == "SoT Rate"] <- "SoT_Rate"
+names(all.23.24)[names(all.23.24) == "SoT.90"] <- "SoT_per_90"
+names(all.23.24)[names(all.23.24) == "Cmp Rate"] <- "Cmp_Rate"
+names(all.23.24)[names(all.23.24) == "Short Cmp Rate"] <- "Short_Cmp_Rate"
+names(all.23.24)[names(all.23.24) == "Medium Cmp Rate"] <- "Medium_Cmp_Rate"
+names(all.23.24)[names(all.23.24) == "Long Cmp Rate"] <- "Long_Cmp_Rate"
+names(all.23.24)[names(all.23.24) == "Blocked Pass"] <- "Blocked_Pass"
+names(all.23.24)[names(all.23.24) == "Tkl dribble Rate"] <- "Tkl_dribble_Rate"
+names(all.23.24)[names(all.23.24) == "Succ Take ons Rate"] <- "Succ_Take_ons_Rate"
+names(all.23.24)[names(all.23.24) == "Tkld Rate"] <- "Tkld_Rate"
+names(all.23.24)[names(all.23.24) == "Aerial Won Rate"] <- "Aerial_Won_Rate"
+names(all.23.24)[names(all.23.24) == "Off Pass"] <- "Off_Pass"
+```
+
+Subsetting for only PE Variables and clustered players
+
+```{r}
+#only players with more than 200 minutes played
+PE.23.24 <- all.23.24 %>%
+  filter(Min >= 200)
+```
+
+```{r}
+#numeric variable config 
+PE.23.24 <- PE.23.24 %>%
+  mutate_at(vars(-c(1:5)), as.numeric)
+```
+
+```{r}
+#ensuring players started most of their minutes per 90 to handle substitute row skew
+PE.23.24 <- PE.23.24[PE.23.24$Min / 180 < PE.23.24$Start, ]
+```
+
+```{r}
+#selecting only PE variables
+PE_23_24 <- subset(PE.23.24, select = c(Player, X90s, CrdR, Crd2Y, PKcon, CrdY, Fls, PrgC, Prg_Carry_Dist, Final_Third_Carry, CPA, G_PK_per_90, G_Sh, G_SoT, npG_npxG, xAG_per_90, xA, KP, PassLive_SCA, Take_ons_SCA, Shot_SCA, Fouled_SCA, Def_SCA, SoT_Rate, SoT_per_90, Cmp_Rate, Short_Cmp_Rate, Medium_Cmp_Rate, Long_Cmp_Rate, TB, Blocked_Pass, CrsPA, TklW, Tkl, Tkl_dribble_Rate, Recov, Off_Pass, Err, Mis, Dis, Off, Succ_Take_ons_Rate, Tkld_Rate, Fld, PKwon, OG, Aerial_Won_Rate))
+```
+
+```{r}
+# Define the variables to be transformed
+PEvariables <- c("CrdR", "Crd2Y", "PKcon", "CrdY", "Fls", 
+               "PrgC", "Prg_Carry_Dist", "Final_Third_Carry", "CPA", "xA", 
+               "KP", "PassLive_SCA", "Take_ons_SCA", "Shot_SCA",
+               "Fouled_SCA", "Def_SCA", "TB", "Blocked_Pass", "CrsPA", 
+               "Recov", "Off_Pass", "Err", "Mis", "Dis", 
+               "Off", "Fld", "PKwon", "OG")
+```
+
+```{r}
+# Convert variables to numeric if they are not
+#clus_df$X90s <- as.numeric(clus_df$X90s)
+
+for (var in PEvariables) {
+  PE_23_24[[var]] <- as.numeric(PE_23_24[[var]])
+}
+
+# Loop over each variable and perform the transformation
+for (var in PEvariables) {
+  new_var <- paste0(var, "_per_90")
+  PE_23_24[[new_var]] <- round(PE_23_24[[var]] / PE_23_24$X90s, 3)
+}
+```
+
+```{r}
+# Remove the variables from the dataframe
+PE_23_24 <- PE_23_24[, !names(PE_23_24) %in% PEvariables]
+
+#Removing the "X90s" variable as it is irrelevant to clustering
+PE_23_24 <- PE_23_24[, !names(PE_23_24) %in% "X90s"]
+```
+
+```{r}
+#Calculating Total tackle rate and removing the root variables
+PE_23_24$Tkl_Rate <- (PE_23_24$TklW / PE_23_24$Tkl)*100
+PE_23_24 <- PE_23_24[, !names(PE_23_24) %in% c("Tkl", "TklW")]
+```
+
+```{r}
+#Replacing NA values
+PE_23_24[is.na(PE_23_24)] <- 0
+```
+
+```{r}
+#normal_PE <- as.data.frame(lapply(PE_23_24[,2:45], normalize))
+normal_PE$Player <- PE_23_24$Player
+```
+
+Using average of related variables to determine the coefficients
+
+```{r}
+# Initialize an empty list to store averages
+DFaverages <- list()
+
+# Calculate averages for each variable using colMeans for all columns
+DFaverages$CrdR <- colMeans(normal_imp_DF[c(23,24,25,26,27,48), ])
+DFaverages$Crd2Y <- colMeans(normal_imp_DF[c(23,24,25,26,27,48), ])
+DFaverages$PKcon <- colMeans(normal_imp_DF[c(52), ])
+DFaverages$CrdY <- colMeans(normal_imp_DF[c(23,24,25,26,27,48), ])
+DFaverages$Fls <- colMeans(normal_imp_DF[c(23,24,25,26,27,48), ])
+
+DFaverages$PrgC <- colMeans(normal_imp_DF[c(9,42,43,44), ])
+DFaverages$Prg_Carry_Dist <- colMeans(normal_imp_DF[c(9,44), ])
+DFaverages$Final_Third_Carry <- colMeans(normal_imp_DF[c(9,45), ])
+DFaverages$CPA <- colMeans(normal_imp_DF[c(9,46), ])
+
+DFaverages$G_PK_per_90 <- colMeans(normal_imp_DF[c(2,4), ])
+DFaverages$G_Sh <- colMeans(normal_imp_DF[c(4), ])
+DFaverages$G_SoT <- colMeans(normal_imp_DF[c(2), ])
+DFaverages$npG_npxG <- colMeans(normal_imp_DF[c(2), ])
+
+DFaverages$xAG_per_90 <- colMeans(normal_imp_DF[c(1,6,18), ])
+DFaverages$xA <- colMeans(normal_imp_DF[c(1,7,18), ])
+DFaverages$KP <- colMeans(normal_imp_DF[c(1,18), ])
+DFaverages$PassLive_SCA <- colMeans(normal_imp_DF[c(1,18), ])
+DFaverages$Take_ons_SCA <- colMeans(normal_imp_DF[c(1,20), ])
+DFaverages$Shot_SCA <- colMeans(normal_imp_DF[c(1,4,5,19), ])
+DFaverages$Fouled_SCA <- colMeans(normal_imp_DF[c(1,21), ])
+DFaverages$Def_SCA <- colMeans(normal_imp_DF[c(1,22), ])
+
+DFaverages$SoT_Rate <- colMeans(normal_imp_DF[c(4), ])
+DFaverages$SoT_per_90 <- colMeans(normal_imp_DF[c(4,5), ])
+
+DFaverages$Cmp_Rate <- colMeans(normal_imp_DF[c(15), ])
+DFaverages$Short_Cmp_Rate <- colMeans(normal_imp_DF[c(12), ])
+DFaverages$Medium_Cmp_Rate <- colMeans(normal_imp_DF[c(13), ])
+DFaverages$Long_Cmp_Rate <- colMeans(normal_imp_DF[c(14), ])
+DFaverages$TB <- colMeans(normal_imp_DF[c(7), ])
+DFaverages$Blocked_Pass <- colMeans(normal_imp_DF[c(15), ])
+
+DFaverages$CrsPA <- colMeans(normal_imp_DF[c(1,3,16,18), ])
+
+DFaverages$TklW_Rate <- colMeans(normal_imp_DF[c(23,24,25,26), ])
+DFaverages$Tkl_dribble_Rate <- colMeans(normal_imp_DF[c(27), ])
+DFaverages$Recov <- colMeans(normal_imp_DF[c(53), ])
+
+DFaverages$Off_Pass <- colMeans(normal_imp_DF[c(17), ])
+DFaverages$Err <- colMeans(normal_imp_DF[c(35,36), ])
+DFaverages$Mis <- colMeans(normal_imp_DF[c(8,47), ])
+DFaverages$Dis <- colMeans(normal_imp_DF[c(34), ])
+DFaverages$Off <- colMeans(normal_imp_DF[c(50), ])
+
+DFaverages$Succ_Take_ons_Rate <- colMeans(normal_imp_DF[c(40), ])
+DFaverages$Tkld_Rate <- colMeans(normal_imp_DF[c(41), ])
+
+DFaverages$Fld <- colMeans(normal_imp_DF[c(34,49), ])
+DFaverages$PKwon <- colMeans(normal_imp_DF[c(51), ])
+DFaverages$OG <- colMeans(normal_imp_DF[c(35,36), ])
+DFaverages$Aerial_Won_Rate <- colMeans(normal_imp_DF[c(54), ])
+
+# Convert the list of averages to a data frame
+PE_coef_DF <- as.data.frame(DFaverages)
+
+```
+
+```{r}
+# Initialize an empty list to store averages
+MFaverages <- list()
+
+# Calculate averages for each variable using colMeans for all columns
+MFaverages$CrdR <- colMeans(normal_imp_MF[c(23,24,25,26,27,48), ])
+MFaverages$Crd2Y <- colMeans(normal_imp_MF[c(23,24,25,26,27,48), ])
+MFaverages$PKcon <- colMeans(normal_imp_MF[c(52), ])
+MFaverages$CrdY <- colMeans(normal_imp_MF[c(23,24,25,26,27,48), ])
+MFaverages$Fls <- colMeans(normal_imp_MF[c(23,24,25,26,27,48), ])
+
+MFaverages$PrgC <- colMeans(normal_imp_MF[c(9,42,43,44), ])
+MFaverages$Prg_Carry_Dist <- colMeans(normal_imp_MF[c(9,44), ])
+MFaverages$Final_Third_Carry <- colMeans(normal_imp_MF[c(9,45), ])
+MFaverages$CPA <- colMeans(normal_imp_MF[c(9,46), ])
+
+MFaverages$G_PK_per_90 <- colMeans(normal_imp_MF[c(2,4), ])
+MFaverages$G_Sh <- colMeans(normal_imp_MF[c(4), ])
+MFaverages$G_SoT <- colMeans(normal_imp_MF[c(2), ])
+MFaverages$npG_npxG <- colMeans(normal_imp_MF[c(2), ])
+
+MFaverages$xAG_per_90 <- colMeans(normal_imp_MF[c(1,6,18), ])
+MFaverages$xA <- colMeans(normal_imp_MF[c(1,7,18), ])
+MFaverages$KP <- colMeans(normal_imp_MF[c(1,18), ])
+MFaverages$PassLive_SCA <- colMeans(normal_imp_MF[c(1,18), ])
+MFaverages$Take_ons_SCA <- colMeans(normal_imp_MF[c(1,20), ])
+MFaverages$Shot_SCA <- colMeans(normal_imp_MF[c(1,4,5,19), ])
+MFaverages$Fouled_SCA <- colMeans(normal_imp_MF[c(1,21), ])
+MFaverages$Def_SCA <- colMeans(normal_imp_MF[c(1,22), ])
+
+MFaverages$SoT_Rate <- colMeans(normal_imp_MF[c(4), ])
+MFaverages$SoT_per_90 <- colMeans(normal_imp_MF[c(4,5), ])
+
+MFaverages$Cmp_Rate <- colMeans(normal_imp_MF[c(15), ])
+MFaverages$Short_Cmp_Rate <- colMeans(normal_imp_MF[c(12), ])
+MFaverages$Medium_Cmp_Rate <- colMeans(normal_imp_MF[c(13), ])
+MFaverages$Long_Cmp_Rate <- colMeans(normal_imp_MF[c(14), ])
+MFaverages$TB <- colMeans(normal_imp_MF[c(7), ])
+MFaverages$Blocked_Pass <- colMeans(normal_imp_MF[c(15), ])
+
+MFaverages$CrsPA <- colMeans(normal_imp_MF[c(1,3,16,18), ])
+
+MFaverages$TklW_Rate <- colMeans(normal_imp_MF[c(23,24,25,26), ])
+MFaverages$Tkl_dribble_Rate <- colMeans(normal_imp_MF[c(27), ])
+MFaverages$Recov <- colMeans(normal_imp_MF[c(53), ])
+
+MFaverages$Off_Pass <- colMeans(normal_imp_MF[c(17), ])
+MFaverages$Err <- colMeans(normal_imp_MF[c(35,36), ])
+MFaverages$Mis <- colMeans(normal_imp_MF[c(8,47), ])
+MFaverages$Dis <- colMeans(normal_imp_MF[c(34), ])
+MFaverages$Off <- colMeans(normal_imp_MF[c(50), ])
+
+MFaverages$Succ_Take_ons_Rate <- colMeans(normal_imp_MF[c(40), ])
+MFaverages$Tkld_Rate <- colMeans(normal_imp_MF[c(41), ])
+
+MFaverages$Fld <- colMeans(normal_imp_MF[c(34,49), ])
+MFaverages$PKwon <- colMeans(normal_imp_MF[c(51), ])
+MFaverages$OG <- colMeans(normal_imp_MF[c(35,36), ])
+MFaverages$Aerial_Won_Rate <- colMeans(normal_imp_MF[c(54), ])
+
+# Convert the list of averages to a data frame
+PE_coef_MF <- as.data.frame(MFaverages)
+
+```
+
+```{r}
+# Initialize an empty list to store averages
+FWaverages <- list()
+
+# Calculate averages for each variable using colMeans for all columns
+FWaverages$CrdR <- colMeans(normal_imp_FW[c(23,24,25,26,27,48), ])
+FWaverages$Crd2Y <- colMeans(normal_imp_FW[c(23,24,25,26,27,48), ])
+FWaverages$PKcon <- colMeans(normal_imp_FW[c(52), ])
+FWaverages$CrdY <- colMeans(normal_imp_FW[c(23,24,25,26,27,48), ])
+FWaverages$Fls <- colMeans(normal_imp_FW[c(23,24,25,26,27,48), ])
+
+FWaverages$PrgC <- colMeans(normal_imp_FW[c(9,42,43,44), ])
+FWaverages$Prg_Carry_Dist <- colMeans(normal_imp_FW[c(9,44), ])
+FWaverages$Final_Third_Carry <- colMeans(normal_imp_FW[c(9,45), ])
+FWaverages$CPA <- colMeans(normal_imp_FW[c(9,46), ])
+
+FWaverages$G_PK_per_90 <- colMeans(normal_imp_FW[c(2,4), ])
+FWaverages$G_Sh <- colMeans(normal_imp_FW[c(4), ])
+FWaverages$G_SoT <- colMeans(normal_imp_FW[c(2), ])
+FWaverages$npG_npxG <- colMeans(normal_imp_FW[c(2), ])
+
+FWaverages$xAG_per_90 <- colMeans(normal_imp_FW[c(1,6,18), ])
+FWaverages$xA <- colMeans(normal_imp_FW[c(1,7,18), ])
+FWaverages$KP <- colMeans(normal_imp_FW[c(1,18), ])
+FWaverages$PassLive_SCA <- colMeans(normal_imp_FW[c(1,18), ])
+FWaverages$Take_ons_SCA <- colMeans(normal_imp_FW[c(1,20), ])
+FWaverages$Shot_SCA <- colMeans(normal_imp_FW[c(1,4,5,19), ])
+FWaverages$Fouled_SCA <- colMeans(normal_imp_FW[c(1,21), ])
+FWaverages$Def_SCA <- colMeans(normal_imp_FW[c(1,22), ])
+
+FWaverages$SoT_Rate <- colMeans(normal_imp_FW[c(4), ])
+FWaverages$SoT_per_90 <- colMeans(normal_imp_FW[c(4,5), ])
+
+FWaverages$Cmp_Rate <- colMeans(normal_imp_FW[c(15), ])
+FWaverages$Short_Cmp_Rate <- colMeans(normal_imp_FW[c(12), ])
+FWaverages$Medium_Cmp_Rate <- colMeans(normal_imp_FW[c(13), ])
+FWaverages$Long_Cmp_Rate <- colMeans(normal_imp_FW[c(14), ])
+FWaverages$TB <- colMeans(normal_imp_FW[c(7), ])
+FWaverages$Blocked_Pass <- colMeans(normal_imp_FW[c(15), ])
+
+FWaverages$CrsPA <- colMeans(normal_imp_FW[c(1,3,16,18), ])
+
+FWaverages$TklW_Rate <- colMeans(normal_imp_FW[c(23,24,25,26), ])
+FWaverages$Tkl_dribble_Rate <- colMeans(normal_imp_FW[c(27), ])
+FWaverages$Recov <- colMeans(normal_imp_FW[c(53), ])
+
+FWaverages$Off_Pass <- colMeans(normal_imp_FW[c(17), ])
+FWaverages$Err <- colMeans(normal_imp_FW[c(35,36), ])
+FWaverages$Mis <- colMeans(normal_imp_FW[c(8,47), ])
+FWaverages$Dis <- colMeans(normal_imp_FW[c(34), ])
+FWaverages$Off <- colMeans(normal_imp_FW[c(50), ])
+
+FWaverages$Succ_Take_ons_Rate <- colMeans(normal_imp_FW[c(40), ])
+FWaverages$Tkld_Rate <- colMeans(normal_imp_FW[c(41), ])
+
+FWaverages$Fld <- colMeans(normal_imp_FW[c(34,49), ])
+FWaverages$PKwon <- colMeans(normal_imp_FW[c(51), ])
+FWaverages$OG <- colMeans(normal_imp_FW[c(35,36), ])
+FWaverages$Aerial_Won_Rate <- colMeans(normal_imp_FW[c(54), ])
+
+# Convert the list of averages to a data frame
+PE_coef_FW <- as.data.frame(FWaverages)
+
+```
+
+Handling the negatively impacting variables
+
+```{r}
+# List of variables to modify
+PEvars_to_modify <- c("CrdR", "Crd2Y", "PKcon", "CrdY", "Fls", 
+                    "Blocked_Pass", "Off_Pass", "Err", "Mis", 
+                    "Dis", "Off", "Tkld_Rate", "OG")
+
+# Modify the variables in PE_coef_DF
+PE_coef_DF[PEvars_to_modify] <- lapply(PE_coef_DF[PEvars_to_modify], function(x) x - 1)
+
+# Modify the variables in PE_coef_MF
+PE_coef_MF[PEvars_to_modify] <- lapply(PE_coef_MF[PEvars_to_modify], function(x) x - 1)
+
+# Modify the variables in PE_coef_FW
+PE_coef_FW[PEvars_to_modify] <- lapply(PE_coef_FW[PEvars_to_modify], function(x) x - 1)
+
+```
+
+Reordering the coefficient variables in alphabetical order
+
+```{r}
+# Function to reorder columns in alphabetical order
+reorder_columns <- function(df) {
+  df[ , order(names(df))]
+}
+
+# Reorder columns in PE_coef_DF, PE_coef_MF, and PE_coef_FW
+PE_coef_DF <- reorder_columns(PE_coef_DF)
+PE_coef_MF <- reorder_columns(PE_coef_MF)
+PE_coef_FW <- reorder_columns(PE_coef_FW)
+
+```
+
+```{r}
+# Rename Tkl_Rate to TklW_Rate in normal_PE
+normal_PE <- normal_PE %>%
+  rename(TklW_Rate = Tkl_Rate)
+
+# Function to reorder columns alphabetically, except the last one
+reorder_columns_except_last <- function(df) {
+  df[ , c(order(names(df)[-ncol(df)]), ncol(df))]
+}
+
+# Reorder columns in normal_PE, keeping the last column in place
+normal_PE <- reorder_columns_except_last(normal_PE)
+```
+
+```{r}
+# Create a temporary vector of column indices
+cols <- 1:ncol(normal_PE)
+
+# Swap columns 24 and 25
+cols[c(24, 25)] <- cols[c(25, 24)]
+
+# Reorder the data frame according to the new column order
+normal_PE <- normal_PE[ , cols]
+```
+
+Implementing the Algorithm
+
+```{r}
+# Assuming the following data frames are already loaded: 
+# normal_PE, PE_coef_DF, PE_coef_MF, PE_coef_FW
+
+# Step 1: Extract Player IDs
+player_ids <- normal_PE$Player
+
+# Initialize a matrix to store the scores
+PE_scores_matrix <- matrix(0, nrow = nrow(normal_PE), ncol = 20)
+
+# Step 2: Calculate DF1 to DF7
+# Extract the first 44 columns from normal_PE for multiplication
+normal_PE_matrix <- as.matrix(normal_PE[, 1:44])  # Exclude the 'Player' column
+
+# Compute DF1 to DF7
+for (i in 1:7) {
+  coef_row <- as.numeric(PE_coef_DF[i, ])  # Extract the ith row of PE_coef_DF
+  PE_scores_matrix[, i + 1] <- rowSums(normal_PE_matrix * coef_row)  # Compute DF1 to DF7
+}
+
+# Step 3: Calculate MF1 to MF7
+# Compute MF1 to MF7
+for (i in 1:7) {
+  coef_row <- as.numeric(PE_coef_MF[i, ])  # Extract the ith row of PE_coef_MF
+  PE_scores_matrix[, i + 8] <- rowSums(normal_PE_matrix * coef_row)  # Compute MF1 to MF7
+}
+
+# Step 4: Calculate FW1 to FW5
+# Compute FW1 to FW5
+for (i in 1:5) {
+  coef_row <- as.numeric(PE_coef_FW[i, ])  # Extract the ith row of PE_coef_FW
+  PE_scores_matrix[, i + 15] <- rowSums(normal_PE_matrix * coef_row)  # Compute FW1 to FW5
+}
+
+# Step 5: Combine Player IDs with the calculated scores
+PE_scores <- data.frame(Player = player_ids, PE_scores_matrix)
+
+# Set column names
+colnames(PE_scores) <- c(
+  "Player", "Delete", "DF1", "DF2", "DF3", "DF4", "DF5", "DF6", "DF7", 
+  "MF1", "MF2", "MF3", "MF4", "MF5", "MF6", "MF7", 
+  "FW1", "FW2", "FW3", "FW4", "FW5"
+)
+
+# Print the resulting data frame to check the result
+print(PE_scores)
+
+```
+
+```{r}
+PE_scores <- PE_scores[, !names(PE_scores) %in% "Delete"]
+```
+
+Scores based on positions
+
+```{r}
+# Create PE_scores_DF by retaining only players in subset_DF_b
+PE_scores_DF <- PE_scores %>%
+  filter(Player %in% subset_DF_b$Player)  # If subset_DF_b is a dataframe, use $Player; if it's a vector, just use subset_DF_b
+
+# Create PE_scores_MF by retaining only players in subset_MF_b
+PE_scores_MF <- PE_scores %>%
+  filter(Player %in% subset_MF_b$Player)  # Similarly, adjust depending on the format of subset_MF_b
+
+# Create PE_scores_FW by retaining only players in subset_FW_b
+PE_scores_FW <- PE_scores %>%
+  filter(Player %in% subset_FW_b$Player)  # Adjust depending on the format of subset_FW_b
+```
+
+Removing unnecessary variables
+
+```{r}
+PE_scores_DF <- PE_scores_DF[,1:8]
+PE_scores_MF <- PE_scores_MF[, c(1, 9:15)]
+PE_scores_FW <- PE_scores_FW[, c(1, 16:20)]
+```
+
+```{r}
+#normal_PE2FW <- normal_PE
+# Assuming normal_PE2FW is the new data frame with the same structure as PE_coef_FW
+
+# Calculate the indices using the new data frame
+normal_PE2FW$Foul_index <- rowMeans(normal_PE2FW[, c("CrdR_per_90", "Crd2Y_per_90", "PKcon_per_90", "CrdY_per_90", "Fls_per_90")]) 
+normal_PE2FW$Carry_index <- rowMeans(normal_PE2FW[, c("PrgC_per_90", "Prg_Carry_Dist_per_90", "Final_Third_Carry_per_90", "CPA_per_90")]) 
+normal_PE2FW$Goal_index <- rowMeans(normal_PE2FW[, c("G_PK_per_90", "G_Sh", "G_SoT", "npG_npxG")]) 
+normal_PE2FW$Assist_index <- rowMeans(normal_PE2FW[, c("xAG_per_90", "xA_per_90", "KP_per_90", "PassLive_SCA_per_90", "Take_ons_SCA_per_90", "Shot_SCA_per_90", "Fouled_SCA_per_90", "Def_SCA_per_90")]) 
+normal_PE2FW$Shot_index <- rowMeans(normal_PE2FW[, c("SoT_Rate", "SoT_per_90")]) 
+normal_PE2FW$Pass_index <- rowMeans(normal_PE2FW[, c("Cmp_Rate", "Short_Cmp_Rate", "Medium_Cmp_Rate", "Long_Cmp_Rate", "TB_per_90")]) 
+normal_PE2FW$Cross_index <- normal_PE2FW$CrsPA_per_90
+normal_PE2FW$Recovery_index <- rowMeans(normal_PE2FW[, c("TklW_Rate", "Tkl_dribble_Rate", "Recov_per_90")])
+normal_PE2FW$Loss_index <- rowMeans(normal_PE2FW[, c("Off_Pass_per_90", "Err_per_90", "Mis_per_90", "Dis_per_90", "Off_per_90")])
+normal_PE2FW$Dribble_index <- normal_PE2FW$Succ_Take_ons_Rate
+
+```
+
+```{r}
+normal_PE2FW <- normal_PE2FW[,45:55]
+```
+
+```{r}
+# Assuming the following data frames are already loaded: 
+# normal_PE, PE_coef_DF, PE_coef_MF, PE_coef_FW
+
+# Step 1: Extract Player IDs
+fwplayer_ids <- normal_PE2FW$Player
+
+# Initialize a matrix to store the scores
+PEFW_scores_matrix <- matrix(0, nrow = nrow(normal_PE2FW), ncol = 6)
+
+# Step 2: Calculate DF1 to DF7
+# Extract the first 44 columns from normal_PE for multiplication
+normal_PEFW_matrix <- as.matrix(normal_PE2FW[, 2:11])  # Exclude the 'Player' column
+
+# Step 4: Calculate FW1 to FW5
+# Compute FW1 to FW5
+for (i in 1:5) {
+  coef_row <- as.numeric(PE_coef_FW2[i, ])  # Extract the ith row of PE_coef_FW
+  PEFW_scores_matrix[, i + 1] <- rowSums(normal_PEFW_matrix * coef_row)  # Compute FW1 to FW5
+}
+
+# Step 5: Combine Player IDs with the calculated scores
+PEFW_scores <- data.frame(Player = fwplayer_ids, PEFW_scores_matrix)
+
+# Set column names
+colnames(PEFW_scores) <- c(
+  "Player", "Delete", "FW1", "FW2", "FW3", "FW4", "FW5"
+)
+
+```
+
+Using average of related variables to determine the coefficients
+
+```{r}
+# Initialize an empty list to store averages
+DFaverages <- list()
+
+# Calculate averages for each variable using colMeans for all columns
+DFaverages$CrdR <- colMeans(imp_DF[c(23,24,25,26,27,48), ])
+DFaverages$Crd2Y <- colMeans(imp_DF[c(23,24,25,26,27,48), ])
+DFaverages$PKcon <- colMeans(imp_DF[c(52), ])
+DFaverages$CrdY <- colMeans(imp_DF[c(23,24,25,26,27,48), ])
+DFaverages$Fls <- colMeans(imp_DF[c(23,24,25,26,27,48), ])
+
+DFaverages$PrgC <- colMeans(imp_DF[c(9,42,43,44), ])
+DFaverages$Prg_Carry_Dist <- colMeans(imp_DF[c(9,44), ])
+DFaverages$Final_Third_Carry <- colMeans(imp_DF[c(9,45), ])
+DFaverages$CPA <- colMeans(imp_DF[c(9,46), ])
+
+DFaverages$G_PK_per_90 <- colMeans(imp_DF[c(2,4), ])
+DFaverages$G_Sh <- colMeans(imp_DF[c(4), ])
+DFaverages$G_SoT <- colMeans(imp_DF[c(2), ])
+DFaverages$npG_npxG <- colMeans(imp_DF[c(2), ])
+
+DFaverages$xAG_per_90 <- colMeans(imp_DF[c(1,6,18), ])
+DFaverages$xA <- colMeans(imp_DF[c(1,7,18), ])
+DFaverages$KP <- colMeans(imp_DF[c(1,18), ])
+DFaverages$PassLive_SCA <- colMeans(imp_DF[c(1,18), ])
+DFaverages$Take_ons_SCA <- colMeans(imp_DF[c(1,20), ])
+DFaverages$Shot_SCA <- colMeans(imp_DF[c(1,4,5,19), ])
+DFaverages$Fouled_SCA <- colMeans(imp_DF[c(1,21), ])
+DFaverages$Def_SCA <- colMeans(imp_DF[c(1,22), ])
+
+DFaverages$SoT_Rate <- colMeans(imp_DF[c(4), ])
+DFaverages$SoT_per_90 <- colMeans(imp_DF[c(4,5), ])
+
+DFaverages$Cmp_Rate <- colMeans(imp_DF[c(15), ])
+DFaverages$Short_Cmp_Rate <- colMeans(imp_DF[c(12), ])
+DFaverages$Medium_Cmp_Rate <- colMeans(imp_DF[c(13), ])
+DFaverages$Long_Cmp_Rate <- colMeans(imp_DF[c(14), ])
+DFaverages$TB <- colMeans(imp_DF[c(7), ])
+DFaverages$Blocked_Pass <- colMeans(imp_DF[c(15), ])
+
+DFaverages$CrsPA <- colMeans(imp_DF[c(1,3,16,18), ])
+
+DFaverages$TklW_Rate <- colMeans(imp_DF[c(23,24,25,26), ])
+DFaverages$Tkl_dribble_Rate <- colMeans(imp_DF[c(27), ])
+DFaverages$Recov <- colMeans(imp_DF[c(53), ])
+
+DFaverages$Off_Pass <- colMeans(imp_DF[c(17), ])
+DFaverages$Err <- colMeans(imp_DF[c(35,36), ])
+DFaverages$Mis <- colMeans(imp_DF[c(8,47), ])
+DFaverages$Dis <- colMeans(imp_DF[c(34), ])
+DFaverages$Off <- colMeans(imp_DF[c(50), ])
+
+DFaverages$Succ_Take_ons_Rate <- colMeans(imp_DF[c(40), ])
+DFaverages$Tkld_Rate <- colMeans(imp_DF[c(41), ])
+
+DFaverages$Fld <- colMeans(imp_DF[c(34,49), ])
+DFaverages$PKwon <- colMeans(imp_DF[c(51), ])
+DFaverages$OG <- colMeans(imp_DF[c(35,36), ])
+DFaverages$Aerial_Won_Rate <- colMeans(imp_DF[c(54), ])
+
+# Convert the list of averages to a data frame
+PE_coef_DF <- as.data.frame(DFaverages)
+
+
+```
+
+```{r}
+imp_MF <- imp_MF[, 2:8]
+# Initialize an empty list to store averages
+MFaverages <- list()
+
+# Calculate averages for each variable using colMeans for all columns
+MFaverages$CrdR <- colMeans(imp_MF[c(23,24,25,26,27,48), ])
+MFaverages$Crd2Y <- colMeans(imp_MF[c(23,24,25,26,27,48), ])
+MFaverages$PKcon <- colMeans(imp_MF[c(52), ])
+MFaverages$CrdY <- colMeans(imp_MF[c(23,24,25,26,27,48), ])
+MFaverages$Fls <- colMeans(imp_MF[c(23,24,25,26,27,48), ])
+
+MFaverages$PrgC <- colMeans(imp_MF[c(9,42,43,44), ])
+MFaverages$Prg_Carry_Dist <- colMeans(imp_MF[c(9,44), ])
+MFaverages$Final_Third_Carry <- colMeans(imp_MF[c(9,45), ])
+MFaverages$CPA <- colMeans(imp_MF[c(9,46), ])
+
+MFaverages$G_PK_per_90 <- colMeans(imp_MF[c(2,4), ])
+MFaverages$G_Sh <- colMeans(imp_MF[c(4), ])
+MFaverages$G_SoT <- colMeans(imp_MF[c(2), ])
+MFaverages$npG_npxG <- colMeans(imp_MF[c(2), ])
+
+MFaverages$xAG_per_90 <- colMeans(imp_MF[c(1,6,18), ])
+MFaverages$xA <- colMeans(imp_MF[c(1,7,18), ])
+MFaverages$KP <- colMeans(imp_MF[c(1,18), ])
+MFaverages$PassLive_SCA <- colMeans(imp_MF[c(1,18), ])
+MFaverages$Take_ons_SCA <- colMeans(imp_MF[c(1,20), ])
+MFaverages$Shot_SCA <- colMeans(imp_MF[c(1,4,5,19), ])
+MFaverages$Fouled_SCA <- colMeans(imp_MF[c(1,21), ])
+MFaverages$Def_SCA <- colMeans(imp_MF[c(1,22), ])
+
+MFaverages$SoT_Rate <- colMeans(imp_MF[c(4), ])
+MFaverages$SoT_per_90 <- colMeans(imp_MF[c(4,5), ])
+
+MFaverages$Cmp_Rate <- colMeans(imp_MF[c(15), ])
+MFaverages$Short_Cmp_Rate <- colMeans(imp_MF[c(12), ])
+MFaverages$Medium_Cmp_Rate <- colMeans(imp_MF[c(13), ])
+MFaverages$Long_Cmp_Rate <- colMeans(imp_MF[c(14), ])
+MFaverages$TB <- colMeans(imp_MF[c(7), ])
+MFaverages$Blocked_Pass <- colMeans(imp_MF[c(15), ])
+
+MFaverages$CrsPA <- colMeans(imp_MF[c(1,3,16,18), ])
+
+MFaverages$TklW_Rate <- colMeans(imp_MF[c(23,24,25,26), ])
+MFaverages$Tkl_dribble_Rate <- colMeans(imp_MF[c(27), ])
+MFaverages$Recov <- colMeans(imp_MF[c(53), ])
+
+MFaverages$Off_Pass <- colMeans(imp_MF[c(17), ])
+MFaverages$Err <- colMeans(imp_MF[c(35,36), ])
+MFaverages$Mis <- colMeans(imp_MF[c(8,47), ])
+MFaverages$Dis <- colMeans(imp_MF[c(34), ])
+MFaverages$Off <- colMeans(imp_MF[c(50), ])
+
+MFaverages$Succ_Take_ons_Rate <- colMeans(imp_MF[c(40), ])
+MFaverages$Tkld_Rate <- colMeans(imp_MF[c(41), ])
+
+MFaverages$Fld <- colMeans(imp_MF[c(34,49), ])
+MFaverages$PKwon <- colMeans(imp_MF[c(51), ])
+MFaverages$OG <- colMeans(imp_MF[c(35,36), ])
+MFaverages$Aerial_Won_Rate <- colMeans(imp_MF[c(54), ])
+
+# Convert the list of averages to a data frame
+PE_coef_MF <- as.data.frame(MFaverages)
+
+```
+
+```{r}
+# Create a copy of PE_coef_MF
+PE_coef_MF2 <- PE_coef_MF
+
+# Calculate new index variables for PE_coef_MF2
+PE_coef_MF2$Foul_index <- rowMeans(PE_coef_MF[, c("CrdR", "Crd2Y", "PKcon", "CrdY", "Fls")]) 
+PE_coef_MF2$Carry_index <- rowMeans(PE_coef_MF[, c("PrgC", "Prg_Carry_Dist", "Final_Third_Carry", "CPA")]) 
+PE_coef_MF2$Goal_index <- rowMeans(PE_coef_MF[, c("G_PK_per_90", "G_Sh", "G_SoT", "npG_npxG")]) 
+PE_coef_MF2$Assist_index <- rowMeans(PE_coef_MF[, c("xAG_per_90", "xA", "KP", "PassLive_SCA", "Take_ons_SCA", "Shot_SCA", "Fouled_SCA", "Def_SCA")]) 
+PE_coef_MF2$Shot_index <- rowMeans(PE_coef_MF[, c("SoT_Rate", "SoT_per_90")]) 
+PE_coef_MF2$Pass_index <- rowMeans(PE_coef_MF[, c("Cmp_Rate", "Short_Cmp_Rate", "Medium_Cmp_Rate", "Long_Cmp_Rate", "TB")]) 
+PE_coef_MF2$Cross_index <- PE_coef_MF$CrsPA
+PE_coef_MF2$Recovery_index <- rowMeans(PE_coef_MF[, c("TklW_Rate", "Tkl_dribble_Rate", "Recov")])
+PE_coef_MF2$Loss_index <- rowMeans(PE_coef_MF[, c("Off_Pass", "Err", "Mis", "Dis", "Off")])
+PE_coef_MF2$Dribble_index <- PE_coef_MF$Succ_Take_ons_Rate
+
+
+```
+
+```{r}
+PE_coef_MF2 <- PE_coef_MF2[,45:54]
+```
+
+```{r}
+# Assuming the following data frames are already loaded: 
+# normal_PE, PE_coef_DF, PE_coef_MF, PE_coef_FW
+
+# Step 1: Extract Player IDs
+#mfplayer_ids <- normal_PE2FW$Player
+
+# Step 2: Adjust PE_coef_FW2
+# Replace positive values in variable 1 (CrsPA) and variable 9 (TklW_Rate) with 0
+# Replace negative values in all other variables with 0
+
+# Convert PE_coef_FW2 to a matrix for easier manipulation
+PE_coef_MF2_matrix <- as.matrix(PE_coef_MF2)
+
+# For variable 1 (CrsPA)
+PE_coef_MF2_matrix[, 1] <- ifelse(PE_coef_MF2_matrix[, 1] > 0, 0, PE_coef_MF2_matrix[, 1])
+
+# For variable 9 (TklW_Rate)
+PE_coef_MF2_matrix[, 9] <- ifelse(PE_coef_MF2_matrix[, 9] > 0, 0, PE_coef_MF2_matrix[, 9])
+
+# For other variables (2-8, 10-44)
+PE_coef_MF2_matrix[, -c(1, 9)] <- ifelse(PE_coef_MF2_matrix[, -c(1, 9)] < 0, 0, PE_coef_MF2_matrix[, -c(1, 9)])
+
+# Convert the matrix back to a data frame
+PE_coef_MF2 <- as.data.frame(PE_coef_MF2_matrix)
+
+# Initialize a matrix to store the scores
+PEMF_scores_matrix <- matrix(0, nrow = nrow(normal_PE2FW), ncol = 8)
+
+# Step 3: Extract the relevant columns from normal_PE2FW
+normal_PEMF_matrix <- as.matrix(normal_PE2FW[, 2:11])  # Exclude the 'Player' column
+
+# Step 4: 
+for (i in 1:7) {
+  coef_row <- as.numeric(PE_coef_MF2[i, ])  # Extract the ith row of PE_coef_FW2
+  PEMF_scores_matrix[, i + 1] <- rowSums(normal_PEMF_matrix * coef_row)  # Compute FW1 to FW5
+}
+
+# Step 5: Combine Player IDs with the calculated scores
+PEMF_scores <- data.frame(Player = fwplayer_ids, PEMF_scores_matrix)
+
+# Set column names
+colnames(PEMF_scores) <- c(
+  "Player", "Delete", "MF1", "MF2", "MF3", "MF4", "MF5", "MF6", "MF7"
+)
+
+```
+
+```{r}
+# Create PE_scores_FW by retaining only players in subset_FW_b
+PEMF_scores_MF <- PEMF_scores %>%
+  filter(Player %in% subset_MF_b$Player)  # Adjust depending on the format of subset_FW_b
+```
+
+```{r}
+PEMF_scores_MF <- PEMF_scores_MF[order(PEMF_scores_MF$Player), ]
+PEMF_scores_MF$cluster <- subset_MF_num_b$cluster
+```
+
+```{r}
+imp_FW <- imp_FW[, 2:6]
+# Initialize an empty list to store averages
+FWaverages <- list()
+
+# Calculate averages for each variable using colMeans for all columns
+FWaverages$CrdR <- colMeans(imp_FW[c(23,24,25,26,27,48), ])
+FWaverages$Crd2Y <- colMeans(imp_FW[c(23,24,25,26,27,48), ])
+FWaverages$PKcon <- colMeans(imp_FW[c(52), ])
+FWaverages$CrdY <- colMeans(imp_FW[c(23,24,25,26,27,48), ])
+FWaverages$Fls <- colMeans(imp_FW[c(23,24,25,26,27,48), ])
+
+FWaverages$PrgC <- colMeans(imp_FW[c(9,42,43,44), ])
+FWaverages$Prg_Carry_Dist <- colMeans(imp_FW[c(9,44), ])
+FWaverages$Final_Third_Carry <- colMeans(imp_FW[c(9,45), ])
+FWaverages$CPA <- colMeans(imp_FW[c(9,46), ])
+
+FWaverages$G_PK_per_90 <- colMeans(imp_FW[c(2,4), ])
+FWaverages$G_Sh <- colMeans(imp_FW[c(4), ])
+FWaverages$G_SoT <- colMeans(imp_FW[c(2), ])
+FWaverages$npG_npxG <- colMeans(imp_FW[c(2), ])
+
+FWaverages$xAG_per_90 <- colMeans(imp_FW[c(1,6,18), ])
+FWaverages$xA <- colMeans(imp_FW[c(1,7,18), ])
+FWaverages$KP <- colMeans(imp_FW[c(1,18), ])
+FWaverages$PassLive_SCA <- colMeans(imp_FW[c(1,18), ])
+FWaverages$Take_ons_SCA <- colMeans(imp_FW[c(1,20), ])
+FWaverages$Shot_SCA <- colMeans(imp_FW[c(1,4,5,19), ])
+FWaverages$Fouled_SCA <- colMeans(imp_FW[c(1,21), ])
+FWaverages$Def_SCA <- colMeans(imp_FW[c(1,22), ])
+
+FWaverages$SoT_Rate <- colMeans(imp_FW[c(4), ])
+FWaverages$SoT_per_90 <- colMeans(imp_FW[c(4,5), ])
+
+FWaverages$Cmp_Rate <- colMeans(imp_FW[c(15), ])
+FWaverages$Short_Cmp_Rate <- colMeans(imp_FW[c(12), ])
+FWaverages$Medium_Cmp_Rate <- colMeans(imp_FW[c(13), ])
+FWaverages$Long_Cmp_Rate <- colMeans(imp_FW[c(14), ])
+FWaverages$TB <- colMeans(imp_FW[c(7), ])
+FWaverages$Blocked_Pass <- colMeans(imp_FW[c(15), ])
+
+FWaverages$CrsPA <- colMeans(imp_FW[c(1,3,16,18), ])
+
+FWaverages$TklW_Rate <- colMeans(imp_FW[c(23,24,25,26), ])
+FWaverages$Tkl_dribble_Rate <- colMeans(imp_FW[c(27), ])
+FWaverages$Recov <- colMeans(imp_FW[c(53), ])
+
+FWaverages$Off_Pass <- colMeans(imp_FW[c(17), ])
+FWaverages$Err <- colMeans(imp_FW[c(35,36), ])
+FWaverages$Mis <- colMeans(imp_FW[c(8,47), ])
+FWaverages$Dis <- colMeans(imp_FW[c(34), ])
+FWaverages$Off <- colMeans(imp_FW[c(50), ])
+
+FWaverages$Succ_Take_ons_Rate <- colMeans(imp_FW[c(40), ])
+FWaverages$Tkld_Rate <- colMeans(imp_FW[c(41), ])
+
+FWaverages$Fld <- colMeans(imp_FW[c(34,49), ])
+FWaverages$PKwon <- colMeans(imp_FW[c(51), ])
+FWaverages$OG <- colMeans(imp_FW[c(35,36), ])
+FWaverages$Aerial_Won_Rate <- colMeans(imp_FW[c(54), ])
+
+# Convert the list of averages to a data frame
+PE_coef_FW <- as.data.frame(FWaverages)
+
+
+```
+
+```{r}
+PE_coef_FW2 <- PE_coef_FW
+PE_coef_FW2$Foul_index <- rowMeans(PE_coef_FW[, c("CrdR", "Crd2Y", "PKcon", "CrdY", "Fls")]) 
+PE_coef_FW2$Carry_index <- rowMeans(PE_coef_FW[, c("PrgC", "Prg_Carry_Dist", "Final_Third_Carry", "CPA")]) 
+PE_coef_FW2$Goal_index <- rowMeans(PE_coef_FW[, c("G_PK_per_90", "G_Sh", "G_SoT", "npG_npxG")]) 
+PE_coef_FW2$Assist_index <- rowMeans(PE_coef_FW[, c("xAG_per_90", "xA", "KP", "PassLive_SCA", "Take_ons_SCA", "Shot_SCA", "Fouled_SCA", "Def_SCA")]) 
+PE_coef_FW2$Shot_index <- rowMeans(PE_coef_FW[, c("SoT_Rate", "SoT_per_90")]) 
+PE_coef_FW2$Pass_index <- rowMeans(PE_coef_FW[, c("Cmp_Rate", "Short_Cmp_Rate", "Medium_Cmp_Rate", "Long_Cmp_Rate", "TB")]) 
+PE_coef_FW2$Cross_index <- PE_coef_FW$CrsPA
+PE_coef_FW2$Recovery_index <- rowMeans(PE_coef_FW[, c("TklW_Rate", "Tkl_dribble_Rate", "Recov")])
+PE_coef_FW2$Loss_index <- rowMeans(PE_coef_FW[, c("Off_Pass", "Err", "Mis", "Dis", "Off")])
+PE_coef_FW2$Dribble_index <- PE_coef_FW$Succ_Take_ons_Rate
+
+
+```
+
+```{r}
+PE_coef_FW2 <- PE_coef_FW2[,45:54]
+```
+
+```{r}
+# Assuming the following data frames are already loaded: 
+# normal_PE, PE_coef_DF, PE_coef_MF, PE_coef_FW
+
+# Step 1: Extract Player IDs
+fwplayer_ids <- normal_PE2FW$Player
+
+# Step 2: Adjust PE_coef_FW2
+# Replace positive values in variable 1 (CrsPA) and variable 9 (TklW_Rate) with 0
+# Replace negative values in all other variables with 0
+
+# Convert PE_coef_FW2 to a matrix for easier manipulation
+PE_coef_FW2_matrix <- as.matrix(PE_coef_FW2)
+
+# For variable 1 (CrsPA)
+PE_coef_FW2_matrix[, 1] <- ifelse(PE_coef_FW2_matrix[, 1] > 0, 0, PE_coef_FW2_matrix[, 1])
+
+# For variable 9 (TklW_Rate)
+PE_coef_FW2_matrix[, 9] <- ifelse(PE_coef_FW2_matrix[, 9] > 0, 0, PE_coef_FW2_matrix[, 9])
+
+# For other variables (2-8, 10-44)
+PE_coef_FW2_matrix[, -c(1, 9)] <- ifelse(PE_coef_FW2_matrix[, -c(1, 9)] < 0, 0, PE_coef_FW2_matrix[, -c(1, 9)])
+
+# Convert the matrix back to a data frame
+PE_coef_FW2 <- as.data.frame(PE_coef_FW2_matrix)
+
+# Initialize a matrix to store the scores
+PEFW_scores_matrix <- matrix(0, nrow = nrow(normal_PE2FW), ncol = 6)
+
+# Step 3: Extract the relevant columns from normal_PE2FW
+normal_PEFW_matrix <- as.matrix(normal_PE2FW[, 2:11])  # Exclude the 'Player' column
+
+# Step 4: Calculate FW1 to FW5
+for (i in 1:5) {
+  coef_row <- as.numeric(PE_coef_FW2[i, ])  # Extract the ith row of PE_coef_FW2
+  PEFW_scores_matrix[, i + 1] <- rowSums(normal_PEFW_matrix * coef_row)  # Compute FW1 to FW5
+}
+
+# Step 5: Combine Player IDs with the calculated scores
+PEFW_scores <- data.frame(Player = fwplayer_ids, PEFW_scores_matrix)
+
+# Set column names
+colnames(PEFW_scores) <- c(
+  "Player", "Delete", "FW1", "FW2", "FW3", "FW4", "FW5"
+)
+
+```
+
+```{r}
+subset_FW_num_b$cluster <- gmm_fw$classification
+```
+
+```{r}
+# Create PE_scores_FW by retaining only players in subset_FW_b
+PEFW_scores_FW <- PEFW_scores %>%
+  filter(Player %in% subset_FW_b$Player)  # Adjust depending on the format of subset_FW_b
+```
+
+```{r}
+PEFW_scores_FW <- PEFW_scores_FW[order(PEFW_scores_FW$Player), ]
+PEFW_scores_FW$cluster <- subset_FW_num_b$cluster
+```
+
+```{r}
+which.max(gmm_df$z[,6])
+```
+
+```{r}
+names(sub_clus_23_24)[names(sub_clus_23_24) == "G.PK"] <- "G_PK"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "G.PK per 90"] <- "G_PK_per_90"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "G.Sh"] <- "G_Sh"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "G.SoT"] <- "G_SoT"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "np.G.xG"] <- "np_G_xG"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "Ast per 90"] <- "Ast_per_90"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "A.xAG"] <- "A_xAG"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "Short Cmp Rate"] <- "Short_Cmp_Rate"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "Medium Cmp Rate"] <- "Medium_Cmp_Rate"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "Long Cmp Rate"] <- "Long_Cmp_Rate"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "Cmp Rate"] <- "Cmp_Rate"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "Blocked Pass"] <- "Blocked_Pass"
+names(sub_clus_23_24)[names(sub_clus_23_24) == "Succ Take ons Rate"] <- "Succ_Take_ons_Rate"
+
+```
+
+```{r}
+sub_PE_df <- subset(sub_clus_23_24, select = c(Player, X90s, CrdR, CrdY_2, PKcon, CrdY, Fls, PrgC, Tot_Car_Dist, Prg_Car_Dist, Att_3rd_Car, CPA, G_PK, G_PK_per_90, G_Sh, G_SoT, np_G_xG, xAG_per_90, Ast, Ast_per_90, xAG, A_xAG, xA, KP, PassLive_SCA, Take_ons_SCA, Shot_SCA, Fouled_SCA, Def_SCA, SoT_Rate, SoT_per_90, PrgP, Total_Pass_Dist, Prg_Pass_Dist, Cmp_Rate, Short_Cmp_Rate, Medium_Cmp_Rate, Long_Cmp_Rate, TB, Blocked_Pass, CrsPA, TklW, Tkl, Tkl_dribble_Rate, Recov, Off_Pass, Err, Mis, Dis, Off, Succ_Take_ons_Rate, Tkld_Rate, Fld, PKwon, OG, Aerial_Won_Rate))
+```
+
+```{r}
+# Define the variables to be transformed
+PE_variables <- c("CrdR", "CrdY_2", "PKcon", "CrdY", "Fls", 
+               "PrgC", "Tot_Car_Dist", "Prg_Car_Dist", "Att_3rd_Car", "CPA", "xA", 
+               "KP", "PassLive_SCA", "Take_ons_SCA", "Shot_SCA",
+               "Fouled_SCA", "Def_SCA", "PrgP", "Total_Pass_Dist", "Prg_Pass_Dist", "TB", "Blocked_Pass", "CrsPA", 
+               "Recov", "Off_Pass", "Err", "Mis", "Dis", 
+               "Off", "Fld", "PKwon", "OG")
+```
+
+```{r}
+# Convert variables to numeric if they are not
+#clus_df$X90s <- as.numeric(clus_df$X90s)
+
+for (var in PE_variables) {
+  sub_PE_df[[var]] <- as.numeric(sub_PE_df[[var]])
+}
+
+# Loop over each variable and perform the transformation
+for (var in PE_variables) {
+  new_var <- paste0(var, "_per_90")
+  sub_PE_df[[new_var]] <- round(sub_PE_df[[var]] / sub_PE_df$X90s, 3)
+}
+```
+
+```{r}
+# Remove the variables from the dataframe
+sub_PE_df <- sub_PE_df[, !names(sub_PE_df) %in% PE_variables]
+
+#Removing the "X90s" variable as it is irrelevant to clustering
+sub_PE_df <- sub_PE_df[, !names(sub_PE_df) %in% "X90s"]
+```
+
+```{r}
+#Calculating Total tackle rate and removing the root variables
+sub_PE_df$Tkl_Rate <- (sub_PE_df$TklW / sub_PE_df$Tkl)*100
+sub_PE_df <- sub_PE_df[, !names(sub_PE_df) %in% c("Tkl", "TklW")]
+```
+
+```{r}
+#Replacing NA values
+sub_PE_df[is.na(sub_PE_df)] <- 0
+```
+
+```{r}
+sub_PE_df <- sub_PE_df[order(sub_PE_df[, 1]), ]
+```
+
+```{r}
+sub_PE_df$Pos <- sub_clus_df$Pos
+```
+
+```{r}
+# Subset for "GK"
+subset_GK_PE <- sub_PE_df %>%
+  filter(grepl("GK", Pos))
+
+# Subset for "DF"
+subset_DF_PE <- sub_PE_df %>%
+  filter(grepl("DF", Pos))
+
+# Subset for "MF"
+subset_MF_PE <- sub_PE_df %>%
+  filter(grepl("MF", Pos))
+
+# Subset for "FW"
+subset_FW_PE <- sub_PE_df %>%
+  filter(grepl("FW", Pos))
+```
+
+```{r}
+subset_DF_PE$cluster <- subset_DF_num_b$cluster
+
+subset_MF_PE$cluster <- subset_MF_num_b$cluster
+
+subset_FW_PE$cluster <- subset_FW_num_b$cluster
+```
+
+```{r}
+# Subset for "DF"
+subset_DF1_PE <- subset_DF_PE %>%
+  filter(grepl(1, cluster))
+subset_DF2_PE <- subset_DF_PE %>%
+  filter(grepl(2, cluster))
+subset_DF3_PE <- subset_DF_PE %>%
+  filter(grepl(3, cluster))
+subset_DF4_PE <- subset_DF_PE %>%
+  filter(grepl(4, cluster))
+subset_DF5_PE <- subset_DF_PE %>%
+  filter(grepl(5, cluster))
+subset_DF6_PE <- subset_DF_PE %>%
+  filter(grepl(6, cluster))
+subset_DF7_PE <- subset_DF_PE %>%
+  filter(grepl(7, cluster))
+
+# Subset for "MF"
+subset_MF1_PE <- subset_MF_PE %>%
+  filter(grepl(1, cluster))
+subset_MF2_PE <- subset_MF_PE %>%
+  filter(grepl(2, cluster))
+subset_MF3_PE <- subset_MF_PE %>%
+  filter(grepl(3, cluster))
+subset_MF4_PE <- subset_MF_PE %>%
+  filter(grepl(4, cluster))
+subset_MF5_PE <- subset_MF_PE %>%
+  filter(grepl(5, cluster))
+subset_MF6_PE <- subset_MF_PE %>%
+  filter(grepl(6, cluster))
+subset_MF7_PE <- subset_MF_PE %>%
+  filter(grepl(7, cluster))
+
+# Subset for "FW"
+subset_FW1_PE <- subset_FW_PE %>%
+  filter(grepl(1, cluster))
+subset_FW2_PE <- subset_FW_PE %>%
+  filter(grepl(2, cluster))
+subset_FW3_PE <- subset_FW_PE %>%
+  filter(grepl(3, cluster))
+subset_FW4_PE <- subset_FW_PE %>%
+  filter(grepl(4, cluster))
+subset_FW5_PE <- subset_FW_PE %>%
+  filter(grepl(5, cluster))
+```
+
+```{r}
+# List of datasets to include in the processing
+PE_datasets_to_process <- c("subset_DF1_PE", "subset_DF2_PE", "subset_DF3_PE", "subset_DF4_PE", "subset_DF5_PE", 
+                            "subset_DF6_PE", "subset_DF7_PE", "subset_MF1_PE", "subset_MF2_PE", "subset_MF3_PE", 
+                            "subset_MF4_PE", "subset_MF5_PE", "subset_MF6_PE", "subset_MF7_PE", "subset_FW1_PE", 
+                            "subset_FW2_PE", "subset_FW3_PE", "subset_FW4_PE", "subset_FW5_PE")
+
+# Define the function to remove specified columns and rename
+remove_and_rename <- function(df_name) {
+  df <- get(df_name)
+  df_num <- df %>% select(-Player, -Pos, -cluster)
+  assign(paste0(df_name, "_num"), df_num, envir = .GlobalEnv)
+}
+
+# Apply the function to the specified datasets
+lapply(PE_datasets_to_process, remove_and_rename)
+
+```
+
+```{r}
+# Identify columns with zero variance
+zero_variance_columns <- sapply(subset_DF6_PE_num, function(col) var(col) == 0)
+
+# Remove those columns
+subset_DF6_PE_num_clean <- subset_DF6_PE_num[, !zero_variance_columns]
+
+# Perform PCA on the cleaned dataset
+pca_df6 <- prcomp(subset_DF6_PE_num_clean, center = TRUE, scale. = TRUE)
+```
+
+```{r}
+#pca_df1 <- prcomp(subset_DF1_PE_num, center = T, scale. = T)
+#pca_df2 <- prcomp(subset_DF2_PE_num, center = T, scale. = T)
+#pca_df3 <- prcomp(subset_DF3_PE_num, center = T, scale. = T)
+#pca_df4 <- prcomp(subset_DF4_PE_num, center = T, scale. = T)
+#pca_df5 <- prcomp(subset_DF5_PE_num, center = T, scale. = T)
+pca_df7 <- prcomp(subset_DF7_PE_num, center = T, scale. = T)
+```
+
+```{r}
+# List of dataset names
+pca_datasets <- list(
+  DF1 = pca_df1,
+  DF2 = pca_df2,
+  DF3 = pca_df3,
+  DF4 = pca_df4,
+  DF5 = pca_df5,
+  DF6 = pca_df6,
+  DF7 = pca_df7
+)
+
+# Function to calculate and plot PCA variance
+analyze_pca <- function(pca_result, dataset_name) {
+  pc_var <- pca_result$sdev^2
+  pev <- pc_var / sum(pc_var)
+  
+  # Plot cumulative proportion of explained variance
+  plot(cumsum(pev), main = paste("Cumulative Proportion of Explained Variance (", dataset_name, ")", sep = ""))
+  abline(h = 0.8)
+  
+  # Return cumulative sum of proportion of explained variance
+  return(cumsum(pev))
+}
+
+# Apply the function to each PCA dataset
+results <- lapply(names(pca_datasets), function(name) {
+  analyze_pca(pca_datasets[[name]], name)
+})
+
+# Optionally, you can access results by name
+# e.g., results[["DF1"]]
+
+```
+
+```{r}
+pc_df1 <- pca_df1$x[,1:8]
+pc_df2 <- pca_df2$x[,1:11]
+pc_df3 <- pca_df3$x[,1:12]
+pc_df4 <- pca_df4$x[,1:11]
+pc_df5 <- pca_df5$x[,1:12]
+pc_df6 <- pca_df6$x[,1:10]
+pc_df7 <- pca_df7$x[,1:7]
+```
+
+```{r}
+# Define the function to plot PCA loadings
+plot_pca_loadings <- function(pca_result, num_components) {
+  plots <- list()
+  
+  # Loop through the specified number of principal components
+  for (i in 1:num_components) {
+    # Extract loadings for the current principal component
+    pc_loadings <- pca_result$rotation[, i]
+    
+    # Filter loadings with absolute values >= 0.1
+    significant_loadings <- pc_loadings[abs(pc_loadings) >= 0.1]
+    
+    # Create a data frame for plotting
+    df_loadings <- data.frame(
+      variable = names(significant_loadings),
+      loading = significant_loadings
+    )
+    
+    # Create the bar plot
+    p <- ggplot(df_loadings, aes(x = reorder(variable, loading), y = loading)) +
+      geom_bar(stat = "identity", fill = "steelblue") +
+      coord_flip() +  # Flip coordinates for better readability
+      theme_minimal() +
+      labs(title = paste("Significant Loadings for Principal Component", i),
+           x = "Variable",
+           y = "Loading")
+    
+    # Store the plot in the list
+    plots[[i]] <- p
+  }
+  
+  return(plots)
+}
+
+# List of PCA datasets and their component counts
+pca_datasets <- list(
+  df1 = list(result = pca_df1, num_components = 8),
+  df2 = list(result = pca_df2, num_components = 11),
+  df3 = list(result = pca_df3, num_components = 12),
+  df4 = list(result = pca_df4, num_components = 11),
+  df5 = list(result = pca_df5, num_components = 12),
+  df6 = list(result = pca_df6, num_components = 10),
+  df7 = list(result = pca_df7, num_components = 7)
+)
+
+# Apply the function to each PCA dataset and store the plots
+all_plots <- lapply(pca_datasets, function(pca_info) {
+  plot_pca_loadings(pca_info$result, pca_info$num_components)
+})
+
+# Print all plots for each dataset
+for (dataset_name in names(all_plots)) {
+  cat("Plots for", dataset_name, "\n")
+  plots <- all_plots[[dataset_name]]
+  for (i in seq_along(plots)) {
+    print(plots[[i]])
+  }
+}
+
+```
+
+```{r}
+setwd("C:/Users/CNHenry/Desktop/Guide Notes/Dissertation/Datasets/23-24")
+WSR.DF1 <- read.csv("DF1.csv", header = F)
+WSR.DF2 <- read.csv("DF2.csv", header = F)
+WSR.DF3 <- read.csv("DF3.csv", header = F)
+WSR.DF4 <- read.csv("DF4.csv", header = F)
+WSR.DF5 <- read.csv("DF5.csv", header = F)
+WSR.DF6 <- read.csv("DF6.csv", header = F)
+WSR.DF7 <- read.csv("DF7.csv", header = F)
+
+WSR.MF1 <- read.csv("MF1.csv", header = F)
+WSR.MF2 <- read.csv("MF2.csv", header = F)
+WSR.MF3 <- read.csv("MF3.csv", header = F)
+WSR.MF4 <- read.csv("MF4.csv", header = F)
+WSR.MF5 <- read.csv("MF5.csv", header = F)
+WSR.MF6 <- read.csv("MF6.csv", header = F)
+WSR.MF7 <- read.csv("MF7.csv", header = F)
+
+WSR.FW1 <- read.csv("FW1.csv", header = F)
+WSR.FW2 <- read.csv("FW2.csv", header = F)
+WSR.FW3 <- read.csv("FW3.csv", header = F)
+WSR.FW4 <- read.csv("FW4.csv", header = F)
+WSR.FW5 <- read.csv("FW5.csv", header = F)
+```
+
+```{r}
+# List of dataset names with the WSR. prefix
+dataset_names <- c("WSR.DF1", "WSR.DF2", "WSR.DF3", "WSR.DF4", "WSR.DF5", "WSR.DF6", "WSR.DF7",
+                    "WSR.MF1", "WSR.MF2", "WSR.MF3", "WSR.MF4", "WSR.MF5", "WSR.MF6", "WSR.MF7",
+                    "WSR.FW1", "WSR.FW2", "WSR.FW3", "WSR.FW4", "WSR.FW5")
+
+# Loop through each dataset
+for (dataset in dataset_names) {
+  # Access the dataset
+  df <- get(dataset)
+  
+  # Rename columns and keep only the first two columns
+  df_processed <- df %>%
+    select(1, 2) %>%
+    rename(Player = V1, Rating = V2)
+  
+  # Assign the modified dataframe back to its original name
+  assign(dataset, df_processed)
+}
+
+```
+
+```{r}
+subset_DF1_PE_num$Rating <- WSR.DF1$Rating
+subset_DF2_PE_num$Rating <- WSR.DF2$Rating
+subset_DF3_PE_num$Rating <- WSR.DF3$Rating
+subset_DF4_PE_num$Rating <- WSR.DF4$Rating
+subset_DF5_PE_num$Rating <- WSR.DF5$Rating
+subset_DF6_PE_num$Rating <- WSR.DF6$Rating
+subset_DF7_PE_num$Rating <- WSR.DF7$Rating
+
+subset_MF1_PE_num$Rating <- WSR.MF1$Rating
+subset_MF2_PE_num$Rating <- WSR.MF2$Rating
+subset_MF3_PE_num$Rating <- WSR.MF3$Rating
+subset_MF4_PE_num$Rating <- WSR.MF4$Rating
+subset_MF5_PE_num$Rating <- WSR.MF5$Rating
+subset_MF6_PE_num$Rating <- WSR.MF6$Rating
+subset_MF7_PE_num$Rating <- WSR.MF7$Rating
+
+subset_FW1_PE_num$Rating <- WSR.FW1$Rating
+subset_FW2_PE_num$Rating <- WSR.FW2$Rating
+subset_FW3_PE_num$Rating <- WSR.FW3$Rating
+subset_FW4_PE_num$Rating <- WSR.FW4$Rating
+subset_FW5_PE_num$Rating <- WSR.FW5$Rating
+```
+
+```{r}
+# List of datasets
+datasets <- c("subset_DF1_PE_num", "subset_DF2_PE_num", "subset_DF3_PE_num", "subset_DF4_PE_num", 
+              "subset_DF5_PE_num", "subset_DF6_PE_num", "subset_DF7_PE_num",
+              "subset_MF1_PE_num", "subset_MF2_PE_num", "subset_MF3_PE_num", "subset_MF4_PE_num",
+              "subset_MF5_PE_num", "subset_MF6_PE_num", "subset_MF7_PE_num",
+              "subset_FW1_PE_num", "subset_FW2_PE_num", "subset_FW3_PE_num", "subset_FW4_PE_num", 
+              "subset_FW5_PE_num")
+
+# Function to calculate and rank correlations
+calculate_and_rank_correlations <- function(df_name) {
+  # Get the dataset
+  df <- get(df_name)
+  
+  # Ensure the Rating variable is present
+  if ("Rating" %in% colnames(df)) {
+    # Calculate correlations of numerical variables with Rating
+    numeric_cols <- sapply(df, is.numeric) & !names(df) %in% "Rating"
+    
+    # Calculate correlation with Rating for each numeric variable
+    correlations <- sapply(names(df)[numeric_cols], function(col) {
+      cor(df[[col]], df$Rating, use = "complete.obs")
+    })
+    
+    # Convert to data frame for better readability
+    correlation_df <- data.frame(
+      Variable = names(correlations),
+      Correlation = correlations
+    )
+    
+    # Rank variables by absolute value of correlation
+    correlation_df <- correlation_df %>%
+      arrange(desc(abs(Correlation)))
+    
+    # Display the ranked correlation results
+    print(paste("Correlations for dataset:", df_name))
+    print(correlation_df)
+    
+  } else {
+    print(paste("Rating variable is not present in", df_name))
+  }
+}
+
+# Apply the function to each dataset
+lapply(datasets, calculate_and_rank_correlations)
+
+```
+
+Selecting correlated independent variables
+
+```{r}
+#Defender subsetting for relevant independent variables
+subset_DF1_PE_ML <- subset(subset_DF1_PE_num, select = c("Succ_Take_ons_Rate", "xAG", "G_PK", "Tkld_Rate", "Off_per_90", "Fls_per_90", "G_PK_per_90", "Tot_Car_Dist_per_90", "Err_per_90", "Prg_Car_Dist_per_90", "Rating"))
+
+subset_DF2_PE_ML <- subset(subset_DF2_PE_num, select = c("Ast", "xAG", "KP_per_90", "Ast_per_90", "PassLive_SCA_per_90", "xA_per_90", "A_xAG", "xAG_per_90", "Prg_Pass_Dist_per_90", "Dis_per_90", "Rating"))
+
+subset_DF3_PE_ML <- subset(subset_DF3_PE_num, select = c("G_PK", "SoT_per_90", "G_PK_per_90", "PrgP_per_90", "Total_Pass_Dist_per_90", "Prg_Pass_Dist_per_90", "Aerial_Won_Rate", "Rating"))
+
+subset_DF4_PE_ML <- subset(subset_DF4_PE_num, select = c("xAG", "Ast", "G_PK", "CrdY_per_90", "Aerial_Won_Rate", "KP_per_90", "Recov_per_90", "PassLive_SCA_per_90", "xA_per_90", "Prg_Pass_Dist_per_90", "Rating"))
+
+subset_DF5_PE_ML <- subset(subset_DF5_PE_num, select = c("G_PK", "Aerial_Won_Rate", "xAG", "Tkl_dribble_Rate", "Ast", "Def_SCA_per_90", "Rating"))
+
+subset_DF6_PE_ML <- subset(subset_DF6_PE_num, select = c("PassLive_SCA_per_90", "G_PK", "KP_per_90", "Off_Pass_per_90", "xAG_per_90", "CrdY_per_90", "xAG", "G_PK_per_90", "TB_per_90", "Aerial_Won_Rate", "Err_per_90", "Recov_per_90", "PrgP_per_90", "Rating"))
+
+subset_DF7_PE_ML <- subset(subset_DF7_PE_num, select = c("xAG", "xAG_per_90", "xA_per_90", "G_PK", "Succ_Take_ons_Rate", "PKcon_per_90", "PassLive_SCA_per_90", "PrgP_per_90", "Fls_per_90", "CrdY_per_90", "Rating"))
+
+```
+
+```{r}
+#Midfielder subsetting for relevant independent variables
+subset_MF1_PE_ML <- subset(subset_MF1_PE_num, select = c("xAG", "G_PK", "Dis_per_90", "CPA_per_90", "Prg_Pass_Dist_per_90", "Recov_per_90", "Mis_per_90", "Ast", "G_PK_per_90", "G_Sh", "Rating"))
+
+subset_MF2_PE_ML <- subset(subset_MF2_PE_num, select = c("G_PK", "xAG", "Ast", "G_SoT", "G_Sh", "PrgP_per_90", "Succ_Take_ons_Rate", "KP_per_90", "Ast_per_90", "A_xAG", "Rating"))
+
+subset_MF3_PE_ML <- subset(subset_MF3_PE_num, select = c("G_PK", "Ast", "xAG", "A_xAG", "Take_ons_SCA_per_90", "G_PK_per_90", "Ast_per_90", "PrgC_per_90", "np_G_xG", "G_SoT", "Tkld_Rate", "Succ_Take_ons_Rate", "SoT_per_90", "Rating"))
+
+subset_MF4_PE_ML <- subset(subset_MF4_PE_num, select = c("xAG", "Ast", "G_PK", "xA_per_90", "xAG_per_90", "KP_per_90", "G_PK_per_90", "TB_per_90", "SoT_per_90", "Ast_per_90", "np_G_xG", "PassLive_SCA_per_90", "Rating"))
+
+subset_MF5_PE_ML <- subset(subset_MF5_PE_num, select = c("xAG", "xAG_per_90", "Ast", "G_PK", "xA_per_90", "G_PK_per_90", "Tot_Car_Dist_per_90", "Prg_Car_Dist_per_90", "G_SoT", "Long_Cmp_Rate", "Ast_per_90", "PassLive_SCA_per_90", "KP_per_90", "OG_per_90", "Def_SCA_per_90", "TB_per_90", "Rating"))
+
+subset_MF6_PE_ML <- subset(subset_MF6_PE_num, select = c("Ast", "Fls_per_90", "xAG", "G_PK", "CrdY_per_90", "A_xAG", "CPA_per_90", "Prg_Car_Dist_per_90", "PrgC_per_90", "Err_per_90", "PKcon_per_90", "Tot_Car_Dist_per_90", "Att_3rd_Car_per_90", "Take_ons_SCA_per_90", "Short_Cmp_Rate", "Cmp_Rate", "Off_Pass_per_90", "Long_Cmp_Rate", "Tkld_Rate", "KP_per_90", "G_SoT", "Rating"))
+
+subset_MF7_PE_ML <- subset(subset_MF7_PE_num, select = c("Ast", "xAG", "G_PK", "OG_per_90", "Prg_Pass_Dist_per_90", "Succ_Take_ons_Rate", "Short_Cmp_Rate", "Rating"))
+```
+
+```{r}
+#Forward subsetting for relevant independent variables
+subset_FW1_PE_ML <- subset(subset_FW1_PE_num, select = c("xAG", "G_PK", "Ast", "G_PK_per_90", "G_Sh", "Take_ons_SCA_per_90", "xA_per_90", "Rating"))
+
+subset_FW2_PE_ML <- subset(subset_FW2_PE_num, select = c("G_PK", "xAG", "Ast", "Ast_per_90", "G_PK_per_90", "SoT_per_90", "A_xAG", "G_Sh", "Succ_Take_ons_Rate", "xA_per_90", "Rating"))
+
+subset_FW3_PE_ML <- subset(subset_FW3_PE_num, select = c("xAG", "G_PK", "Ast", "xAG_per_90", "xA_per_90", "KP_per_90", "G_PK_per_90", "SoT_per_90", "PassLive_SCA_per_90", "Rating"))
+
+subset_FW4_PE_ML <- subset(subset_FW4_PE_num, select = c("G_PK", "Ast", "xAG", "xA_per_90", "Ast_per_90", "Total_Pass_Dist_per_90", "xAG_per_90", "KP_per_90", "Succ_Take_ons_Rate", "G_PK_per_90", "Tkld_Rate", "Prg_Car_Dist_per_90", "TB_per_90", "PrgC_per_90", "Tot_Car_Dist_per_90", "Fls_per_90", "Att_3rd_Car_per_90", "CPA_per_90", "Prg_Pass_Dist_per_90", "G_Sh", "np_G_xG", "Rating"))
+
+subset_FW5_PE_ML <- subset(subset_FW5_PE_num, select = c("PrgC_per_90", "Prg_Car_Dist_per_90", "PassLive_SCA_per_90", "G_PK", "Tot_Car_Dist_per_90", "CrdR_per_90", "PrgP_per_90", "xAG", "xAG_per_90", "G_Sh", "G_PK_per_90", "Tkld_Rate", "KP_per_90", "Fouled_SCA_per_90", "Medium_Cmp_Rate", "Take_ons_SCA_per_90", "xA_per_90", "Succ_Take_ons_Rate", "Att_3rd_Car_per_90", "Prg_Pass_Dist_per_90", "G_SoT", "CPA_per_90", "Ast_per_90", "PKwon_per_90", "PKcon_per_90", "Rating"))
+```
+
+Checking for multicollinearity
+
+```{r}
+# Create correlation matrices for each subset excluding 'Rating'
+
+# Define a function to compute the correlation matrix excluding 'Rating'
+cor_matrix <- function(df) {
+  df <- df[ , !(names(df) %in% "Rating")]  # Remove the 'Rating' column
+  cor(df, use = "complete.obs")  # Compute correlation matrix
+}
+
+# Compute correlation matrices for each subset
+cor_matrix_DF1_PE_ML <- cor_matrix(subset_DF1_PE_ML)
+cor_matrix_DF2_PE_ML <- cor_matrix(subset_DF2_PE_ML)
+cor_matrix_DF3_PE_ML <- cor_matrix(subset_DF3_PE_ML)
+cor_matrix_DF4_PE_ML <- cor_matrix(subset_DF4_PE_ML)
+cor_matrix_DF5_PE_ML <- cor_matrix(subset_DF5_PE_ML)
+cor_matrix_DF6_PE_ML <- cor_matrix(subset_DF6_PE_ML)
+cor_matrix_DF7_PE_ML <- cor_matrix(subset_DF7_PE_ML)
+
+cor_matrix_MF1_PE_ML <- cor_matrix(subset_MF1_PE_ML)
+cor_matrix_MF2_PE_ML <- cor_matrix(subset_MF2_PE_ML)
+cor_matrix_MF3_PE_ML <- cor_matrix(subset_MF3_PE_ML)
+cor_matrix_MF4_PE_ML <- cor_matrix(subset_MF4_PE_ML)
+cor_matrix_MF5_PE_ML <- cor_matrix(subset_MF5_PE_ML)
+cor_matrix_MF6_PE_ML <- cor_matrix(subset_MF6_PE_ML)
+cor_matrix_MF7_PE_ML <- cor_matrix(subset_MF7_PE_ML)
+
+cor_matrix_FW1_PE_ML <- cor_matrix(subset_FW1_PE_ML)
+cor_matrix_FW2_PE_ML <- cor_matrix(subset_FW2_PE_ML)
+cor_matrix_FW3_PE_ML <- cor_matrix(subset_FW3_PE_ML)
+cor_matrix_FW4_PE_ML <- cor_matrix(subset_FW4_PE_ML)
+cor_matrix_FW5_PE_ML <- cor_matrix(subset_FW5_PE_ML)
+```
+
+Removing unnecessary variables
+
+```{r}
+#Defender subsetting for relevant independent variables
+subset_DF1_PE_ML <- subset(subset_DF1_PE_num, select = c("Succ_Take_ons_Rate", "xAG", "G_PK", "Off_per_90", "Fls_per_90", "Tot_Car_Dist_per_90", "Err_per_90", "Rating"))
+
+subset_DF2_PE_ML <- subset(subset_DF2_PE_num, select = c("Ast", "KP_per_90", "PassLive_SCA_per_90", "A_xAG", "Prg_Pass_Dist_per_90", "Dis_per_90", "Rating"))
+
+subset_DF3_PE_ML <- subset(subset_DF3_PE_num, select = c("G_PK", "SoT_per_90", "PrgP_per_90", "Total_Pass_Dist_per_90", "Aerial_Won_Rate", "Rating"))
+
+subset_DF4_PE_ML <- subset(subset_DF4_PE_num, select = c("xAG", "Ast", "G_PK", "CrdY_per_90", "Aerial_Won_Rate", "KP_per_90", "Recov_per_90", "PassLive_SCA_per_90", "Prg_Pass_Dist_per_90", "Rating"))
+
+subset_DF6_PE_ML <- subset(subset_DF6_PE_num, select = c("PassLive_SCA_per_90", "G_PK", "KP_per_90", "xAG_per_90", "CrdY_per_90", "TB_per_90", "Aerial_Won_Rate", "Err_per_90", "Recov_per_90", "PrgP_per_90", "Rating"))
+
+subset_DF7_PE_ML <- subset(subset_DF7_PE_num, select = c("xAG", "xAG_per_90", "xA_per_90", "G_PK", "Succ_Take_ons_Rate", "PKcon_per_90", "Fls_per_90", "CrdY_per_90", "Rating"))
+
+```
+
+```{r}
+#Midfielder subsetting for relevant independent variables
+subset_MF1_PE_ML <- subset(subset_MF1_PE_num, select = c("xAG", "G_PK", "Dis_per_90", "CPA_per_90", "Prg_Pass_Dist_per_90", "Recov_per_90", "Mis_per_90", "Ast", "G_Sh", "Rating"))
+
+subset_MF2_PE_ML <- subset(subset_MF2_PE_num, select = c("G_PK", "xAG", "G_SoT", "PrgP_per_90", "Succ_Take_ons_Rate", "KP_per_90", "Ast_per_90", "A_xAG", "Rating"))
+
+subset_MF3_PE_ML <- subset(subset_MF3_PE_num, select = c("G_PK", "Ast", "A_xAG", "Take_ons_SCA_per_90", "PrgC_per_90", "np_G_xG", "G_SoT", "Tkld_Rate", "SoT_per_90", "Rating"))
+
+subset_MF4_PE_ML <- subset(subset_MF4_PE_num, select = c("xAG", "G_PK", "xA_per_90", "G_PK_per_90", "TB_per_90", "SoT_per_90", "Ast_per_90", "np_G_xG", "PassLive_SCA_per_90", "Rating"))
+
+subset_MF5_PE_ML <- subset(subset_MF5_PE_num, select = c("xAG", "G_PK", "xA_per_90", "Tot_Car_Dist_per_90", "G_SoT", "Long_Cmp_Rate", "Ast_per_90", "OG_per_90", "Def_SCA_per_90", "TB_per_90", "Rating"))
+
+subset_MF6_PE_ML <- subset(subset_MF6_PE_num, select = c("Ast", "Fls_per_90", "G_PK", "CrdY_per_90", "CPA_per_90", "Prg_Car_Dist_per_90", "Err_per_90", "Att_3rd_Car_per_90", "Take_ons_SCA_per_90", "Short_Cmp_Rate", "Off_Pass_per_90", "Long_Cmp_Rate", "Tkld_Rate", "KP_per_90", "G_SoT", "Rating"))
+
+subset_MF7_PE_ML <- subset(subset_MF7_PE_num, select = c("Ast", "xAG", "G_PK", "OG_per_90", "Prg_Pass_Dist_per_90", "Succ_Take_ons_Rate", "Short_Cmp_Rate", "Rating"))
+```
+
+```{r}
+#Forward subsetting for relevant independent variables
+subset_FW1_PE_ML <- subset(subset_FW1_PE_num, select = c("xAG", "G_PK", "G_PK_per_90", "G_Sh", "Take_ons_SCA_per_90", "xA_per_90", "Rating"))
+
+subset_FW2_PE_ML <- subset(subset_FW2_PE_num, select = c("G_PK", "xAG", "Ast_per_90", "G_PK_per_90", "SoT_per_90", "A_xAG", "G_Sh", "Succ_Take_ons_Rate", "xA_per_90", "Rating"))
+
+subset_FW3_PE_ML <- subset(subset_FW3_PE_num, select = c("xAG", "G_PK", "xAG_per_90", "xA_per_90", "KP_per_90", "SoT_per_90", "PassLive_SCA_per_90", "Rating"))
+
+subset_FW4_PE_ML <- subset(subset_FW4_PE_num, select = c("G_PK", "Ast", "xA_per_90", "Total_Pass_Dist_per_90", "xAG_per_90", "KP_per_90", "Succ_Take_ons_Rate", "G_PK_per_90", "Prg_Car_Dist_per_90", "TB_per_90", "Fls_per_90", "CPA_per_90", "G_Sh", "np_G_xG", "Rating"))
+
+subset_FW5_PE_ML <- subset(subset_FW5_PE_num, select = c("PrgC_per_90", "PassLive_SCA_per_90", "G_PK", "CrdR_per_90", "PrgP_per_90", "xAG", "G_Sh", "Tkld_Rate", "KP_per_90", "Fouled_SCA_per_90", "Medium_Cmp_Rate", "Take_ons_SCA_per_90", "xA_per_90", "Prg_Pass_Dist_per_90", "CPA_per_90", "Ast_per_90", "PKwon_per_90", "PKcon_per_90", "Rating"))
+```
+
+MACHINE LEARNING
+
+```{r}
+# Fit the regression model
+DF1_model <- lm(Rating ~ ., data = subset_DF1_PE_ML)
+
+# View the summary of the model
+summary(DF1_model)
+
+```
+
+```{r}
+#DF1_model_step <- stepAIC(DF1_model, direction = "both")
+
+# View the summary of the refined model
+summary(DF1_model_step)
+```
+
+```{r}
+# Fit the regression model
+#DF2_model <- lm(Rating ~ ., data = subset_DF2_PE_ML)
+
+# View the summary of the model
+summary(DF2_model)
+```
+
+```{r}
+#DF2_model_step <- stepAIC(DF2_model, direction = "both")
+
+# View the summary of the refined model
+summary(DF2_model_step)
+```
+
+```{r}
+# Fit the regression model
+DF3_model <- lm(Rating ~ ., data = subset_DF3_PE_ML)
+
+# View the summary of the model
+summary(DF3_model)
+```
+
+```{r}
+DF3_model_step <- stepAIC(DF3_model, direction = "both")
+
+# View the summary of the refined model
+summary(DF3_model_step)
+```
+
+```{r}
+# Fit the regression model
+DF4_model <- lm(Rating ~ ., data = subset_DF4_PE_ML)
+
+# View the summary of the model
+summary(DF4_model)
+```
+
+```{r}
+DF4_model_step <- stepAIC(DF4_model, direction = "both")
+
+# View the summary of the refined model
+summary(DF4_model_step)
+```
+
+```{r}
+# Fit the regression model
+DF5_model <- lm(Rating ~ ., data = subset_DF5_PE_ML)
+
+# View the summary of the model
+summary(DF5_model)
+```
+
+```{r}
+DF5_model_step <- stepAIC(DF5_model, direction = "both")
+
+# View the summary of the refined model
+summary(DF5_model_step)
+```
+
+```{r}
+# Fit the regression model
+DF6_model <- lm(Rating ~ ., data = subset_DF6_PE_ML)
+
+# View the summary of the model
+summary(DF6_model)
+```
+
+```{r}
+DF6_model_step <- stepAIC(DF6_model, direction = "both")
+
+# View the summary of the refined model
+summary(DF6_model_step)
+```
+
+```{r}
+# Fit the regression model
+DF7_model <- lm(Rating ~ ., data = subset_DF7_PE_ML)
+
+# View the summary of the model
+summary(DF7_model)
+```
+
+```{r}
+DF7_model_step <- stepAIC(DF7_model, direction = "both")
+
+# View the summary of the refined model
+summary(DF7_model_step)
+```
+
+```{r}
+# Fit the regression model
+MF1_model <- lm(Rating ~ ., data = subset_MF1_PE_ML)
+
+# View the summary of the model
+summary(MF1_model)
+```
+
+```{r}
+MF1_model_step <- stepAIC(MF1_model, direction = "both")
+
+# View the summary of the refined model
+summary(MF1_model_step)
+```
+
+```{r}
+# Fit the regression model
+MF2_model <- lm(Rating ~ ., data = subset_MF2_PE_ML)
+
+# View the summary of the model
+summary(MF2_model)
+```
+
+```{r}
+MF2_model_step <- stepAIC(MF2_model, direction = "both")
+
+# View the summary of the refined model
+summary(MF2_model_step)
+```
+
+```{r}
+# Fit the regression model
+MF3_model <- lm(Rating ~ ., data = subset_MF3_PE_ML)
+
+# View the summary of the model
+summary(MF3_model)
+```
+
+```{r}
+MF3_model_step <- stepAIC(MF3_model, direction = "both")
+
+# View the summary of the refined model
+summary(MF3_model_step)
+```
+
+```{r}
+# Fit the regression model
+MF4_model <- lm(Rating ~ ., data = subset_MF4_PE_ML)
+
+# View the summary of the model
+summary(MF4_model)
+```
+
+```{r}
+MF4_model_step <- stepAIC(MF4_model, direction = "both")
+
+# View the summary of the refined model
+summary(MF4_model_step)
+```
+
+```{r}
+# Fit the regression model
+MF5_model <- lm(Rating ~ ., data = subset_MF5_PE_ML)
+
+# View the summary of the model
+summary(MF5_model)
+```
+
+```{r}
+MF5_model_step <- stepAIC(MF5_model, direction = "both")
+
+# View the summary of the refined model
+summary(MF5_model_step)
+```
+
+```{r}
+# Fit the regression model
+MF7_model <- lm(Rating ~ ., data = subset_MF7_PE_ML)
+
+# View the summary of the model
+summary(MF7_model)
+```
+
+```{r}
+MF7_model_step <- stepAIC(MF7_model, direction = "both")
+
+# View the summary of the refined model
+summary(MF7_model_step)
+```
+
+```{r}
+# Fit the regression model
+FW1_model <- lm(Rating ~ ., data = subset_FW1_PE_ML)
+
+# View the summary of the model
+summary(FW1_model)
+```
+
+```{r}
+FW1_model_step <- stepAIC(FW1_model, direction = "both")
+
+# View the summary of the refined model
+summary(FW1_model_step)
+```
+
+```{r}
+# Fit the regression model
+FW2_model <- lm(Rating ~ ., data = subset_FW2_PE_ML)
+
+# View the summary of the model
+summary(FW2_model)
+```
+
+```{r}
+FW2_model_step <- stepAIC(FW2_model, direction = "both")
+
+# View the summary of the refined model
+summary(FW2_model_step)
+```
+
+```{r}
+# Fit the regression model
+FW3_model <- lm(Rating ~ ., data = subset_FW3_PE_ML)
+
+# View the summary of the model
+summary(FW3_model)
+```
+
+```{r}
+FW3_model_step <- stepAIC(FW3_model, direction = "both")
+
+# View the summary of the refined model
+summary(FW3_model_step)
+```
+
+```{r}
+# Fit the regression model
+FW4_model <- lm(Rating ~ ., data = subset_FW4_PE_ML)
+
+# View the summary of the model
+summary(FW4_model)
+```
+
+```{r}
+FW4_model_step <- stepAIC(FW4_model, direction = "both")
+
+# View the summary of the refined model
+summary(FW4_model_step)
+```
+
+```{r}
+# Fit the regression model
+FW5_model <- lm(Rating ~ ., data = subset_FW5_PE_ML)
+
+# View the summary of the model
+summary(FW5_model)
+```
+
+```{r}
+#FW5_model_step <- stepAIC(FW5_model, direction = "both")
+
+# View the summary of the refined model
+summary(FW5_model_step)
+```
+
+```{r}
+subset_MF6b_PE_ML <- subset(subset_MF6_PE_num, select = c("Ast", "Fls_per_90", "G_PK", "CrdY_per_90", "CPA_per_90", "Prg_Car_Dist_per_90", "Err_per_90", "Att_3rd_Car_per_90", "Take_ons_SCA_per_90", "Rating"))
+```
+
+```{r}
+# Fit the regression model
+MF6_model <- lm(Rating ~ ., data = subset_MF6b_PE_ML)
+
+# View the summary of the model
+summary(MF6_model)
+```
+
+```{r}
+MF6_model_step <- stepAIC(MF6_model, direction = "both")
+
+# View the summary of the refined model
+summary(MF6_model_step)
+```
+
+```{r}
+# Predicting the Rating using the DF1_model
+predicted_DF1 <- predict(DF1_model, subset_DF1_PE_ML)
+
+# Predicting the Rating using the DF1_model_step
+predicted_DF1_step <- predict(DF1_model_step, subset_DF1_PE_ML)
+
+cor(predicted_DF1, subset_DF1_PE_ML$Rating)
+cor(predicted_DF1_step, subset_DF1_PE_ML$Rating)
+
+# DF2
+predicted_DF2 <- predict(DF2_model, subset_DF2_PE_ML)
+predicted_DF2_step <- predict(DF2_model_step, subset_DF2_PE_ML)
+cor(predicted_DF2, subset_DF2_PE_ML$Rating)
+cor(predicted_DF2_step, subset_DF2_PE_ML$Rating)
+
+# DF3
+predicted_DF3 <- predict(DF3_model, subset_DF3_PE_ML)
+predicted_DF3_step <- predict(DF3_model_step, subset_DF3_PE_ML)
+cor(predicted_DF3, subset_DF3_PE_ML$Rating)
+cor(predicted_DF3_step, subset_DF3_PE_ML$Rating)
+
+# DF4
+predicted_DF4 <- predict(DF4_model, subset_DF4_PE_ML)
+predicted_DF4_step <- predict(DF4_model_step, subset_DF4_PE_ML)
+cor(predicted_DF4, subset_DF4_PE_ML$Rating)
+cor(predicted_DF4_step, subset_DF4_PE_ML$Rating)
+
+# DF5
+predicted_DF5 <- predict(DF5_model, subset_DF5_PE_ML)
+predicted_DF5_step <- predict(DF5_model_step, subset_DF5_PE_ML)
+cor(predicted_DF5, subset_DF5_PE_ML$Rating)
+cor(predicted_DF5_step, subset_DF5_PE_ML$Rating)
+
+# DF6
+predicted_DF6 <- predict(DF6_model, subset_DF6_PE_ML)
+predicted_DF6_step <- predict(DF6_model_step, subset_DF6_PE_ML)
+cor(predicted_DF6, subset_DF6_PE_ML$Rating)
+cor(predicted_DF6_step, subset_DF6_PE_ML$Rating)
+
+# DF7
+predicted_DF7 <- predict(DF7_model, subset_DF7_PE_ML)
+predicted_DF7_step <- predict(DF7_model_step, subset_DF7_PE_ML)
+cor(predicted_DF7, subset_DF7_PE_ML$Rating)
+cor(predicted_DF7_step, subset_DF7_PE_ML$Rating)
+
+```
+
+```{r}
+# MF1
+predicted_MF1 <- predict(MF1_model, subset_MF1_PE_ML)
+predicted_MF1_step <- predict(MF1_model_step, subset_MF1_PE_ML)
+cor(predicted_MF1, subset_MF1_PE_ML$Rating)
+cor(predicted_MF1_step, subset_MF1_PE_ML$Rating)
+
+# MF2
+predicted_MF2 <- predict(MF2_model, subset_MF2_PE_ML)
+predicted_MF2_step <- predict(MF2_model_step, subset_MF2_PE_ML)
+cor(predicted_MF2, subset_MF2_PE_ML$Rating)
+cor(predicted_MF2_step, subset_MF2_PE_ML$Rating)
+
+# MF3
+predicted_MF3 <- predict(MF3_model, subset_MF3_PE_ML)
+predicted_MF3_step <- predict(MF3_model_step, subset_MF3_PE_ML)
+cor(predicted_MF3, subset_MF3_PE_ML$Rating)
+cor(predicted_MF3_step, subset_MF3_PE_ML$Rating)
+
+# MF4
+predicted_MF4 <- predict(MF4_model, subset_MF4_PE_ML)
+predicted_MF4_step <- predict(MF4_model_step, subset_MF4_PE_ML)
+cor(predicted_MF4, subset_MF4_PE_ML$Rating)
+cor(predicted_MF4_step, subset_MF4_PE_ML$Rating)
+
+# MF5
+predicted_MF5 <- predict(MF5_model, subset_MF5_PE_ML)
+predicted_MF5_step <- predict(MF5_model_step, subset_MF5_PE_ML)
+cor(predicted_MF5, subset_MF5_PE_ML$Rating)
+cor(predicted_MF5_step, subset_MF5_PE_ML$Rating)
+
+# MF6
+predicted_MF6 <- predict(MF6_model, subset_MF6b_PE_ML)
+predicted_MF6_step <- predict(MF6_model_step, subset_MF6b_PE_ML)
+cor(predicted_MF6, subset_MF6b_PE_ML$Rating)
+cor(predicted_MF6_step, subset_MF6b_PE_ML$Rating)
+
+# MF7
+predicted_MF7 <- predict(MF7_model, subset_MF7_PE_ML)
+predicted_MF7_step <- predict(MF7_model_step, subset_MF7_PE_ML)
+cor(predicted_MF7, subset_MF7_PE_ML$Rating)
+cor(predicted_MF7_step, subset_MF7_PE_ML$Rating)
+
+```
+
+```{r}
+# FW1
+predicted_FW1 <- predict(FW1_model, subset_FW1_PE_ML)
+predicted_FW1_step <- predict(FW1_model_step, subset_FW1_PE_ML)
+cor(predicted_FW1, subset_FW1_PE_ML$Rating)
+cor(predicted_FW1_step, subset_FW1_PE_ML$Rating)
+
+# FW2
+predicted_FW2 <- predict(FW2_model, subset_FW2_PE_ML)
+predicted_FW2_step <- predict(FW2_model_step, subset_FW2_PE_ML)
+cor(predicted_FW2, subset_FW2_PE_ML$Rating)
+cor(predicted_FW2_step, subset_FW2_PE_ML$Rating)
+
+# FW3
+predicted_FW3 <- predict(FW3_model, subset_FW3_PE_ML)
+predicted_FW3_step <- predict(FW3_model_step, subset_FW3_PE_ML)
+cor(predicted_FW3, subset_FW3_PE_ML$Rating)
+cor(predicted_FW3_step, subset_FW3_PE_ML$Rating)
+
+# FW4
+predicted_FW4 <- predict(FW4_model, subset_FW4_PE_ML)
+predicted_FW4_step <- predict(FW4_model_step, subset_FW4_PE_ML)
+cor(predicted_FW4, subset_FW4_PE_ML$Rating)
+cor(predicted_FW4_step, subset_FW4_PE_ML$Rating)
+
+# FW5
+predicted_FW5 <- predict(FW5_model, subset_FW5_PE_ML)
+predicted_FW5_step <- predict(FW5_model_step, subset_FW5_PE_ML)
+cor(predicted_FW5, subset_FW5_PE_ML$Rating)
+cor(predicted_FW5_step, subset_FW5_PE_ML$Rating)
+```
+
+```{r}
+#sort(gmm_df$z[, 1], decreasing = TRUE)
+#which(gmm_df$z[, 1] > 0.1 & gmm_df$z[, 1] < 0.5)
+
+#sort(gmm_df$z[, 2], decreasing = TRUE)
+#which(gmm_df$z[, 2] > 0.1 & gmm_df$z[, 2] < 0.5)
+
+#sort(gmm_df$z[, 3], decreasing = TRUE)
+#which(gmm_df$z[, 3] > 0.1 & gmm_df$z[, 3] < 0.5)
+
+#sort(gmm_df$z[, 4], decreasing = TRUE)
+#which(gmm_df$z[, 4] > 0.1 & gmm_df$z[, 4] < 0.5)
+
+#sort(gmm_df$z[, 5], decreasing = TRUE)
+#which(gmm_df$z[, 5] > 0.1 & gmm_df$z[, 5] < 0.5)
+
+#sort(gmm_df$z[, 6], decreasing = TRUE)
+#which(gmm_df$z[, 6] > 0.1 & gmm_df$z[, 6] < 0.5)
+
+#sort(gmm_df$z[, 7], decreasing = TRUE)
+```
+
+```{r}
+#sort(gmm_mf$z[, 1], decreasing = TRUE)
+#which(gmm_mf$z[, 1] > 0.1 & gmm_mf$z[, 1] < 0.5)
+
+#sort(gmm_mf$z[, 2], decreasing = TRUE)
+#which(gmm_mf$z[, 2] > 0.1 & gmm_mf$z[, 2] < 0.5)
+
+#sort(gmm_mf$z[, 3], decreasing = TRUE)
+#which(gmm_mf$z[, 3] > 0.1 & gmm_mf$z[, 3] < 0.5)
+
+#sort(gmm_mf$z[, 4], decreasing = TRUE)
+#which(gmm_mf$z[, 4] > 0.1 & gmm_mf$z[, 4] < 0.5)
+
+#sort(gmm_mf$z[, 5], decreasing = TRUE)
+
+#sort(gmm_mf$z[, 6], decreasing = TRUE)
+#which(gmm_mf$z[, 6] > 0.1 & gmm_mf$z[, 6] < 0.5)
+
+#sort(gmm_mf$z[, 7], decreasing = TRUE)
+#which(gmm_mf$z[, 7] > 0.1 & gmm_mf$z[, 7] < 0.5)
+```
+
+```{r}
+#sort(gmm_fw$z[, 1], decreasing = TRUE)
+#which(gmm_fw$z[, 1] > 0.1 & gmm_fw$z[, 1] < 0.5)
+
+#sort(gmm_fw$z[, 2], decreasing = TRUE)
+#which(gmm_fw$z[, 2] > 0.1 & gmm_fw$z[, 2] < 0.5)
+
+#sort(gmm_fw$z[, 3], decreasing = TRUE)
+#which(gmm_fw$z[, 3] > 0.1 & gmm_fw$z[, 3] < 0.5)
+
+#sort(gmm_fw$z[, 4], decreasing = TRUE)
+#which(gmm_fw$z[, 4] > 0.1 & gmm_fw$z[, 4] < 0.5)
+
+#sort(gmm_fw$z[, 5], decreasing = TRUE)
+#which(gmm_fw$z[, 5] > 0.1 & gmm_fw$z[, 5] < 0.5)
+```
+
+```{r}
+subset_DF1_PE_ML$Player <- subset_DF1_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_df1 <- which(gmm_df$z[, 1] > 0.1 & gmm_df$z[, 1] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_df1 <- subset_DF_PE[rows_df1, ]
+# 3. Add these rows to subset_DF1_PE_ML
+subset_DF1_PE_ML <- bind_rows(subset_DF1_PE_ML, sub_df1)
+subset_DF1_PE_ML <- subset_DF1_PE_ML[, 1:9]
+
+
+
+subset_DF2_PE_ML$Player <- subset_DF2_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_df2 <- which(gmm_df$z[, 2] > 0.1 & gmm_df$z[, 2] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_df2 <- subset_DF_PE[rows_df2, ]
+# 3. Add these rows to subset_DF1_PE_ML
+subset_DF2_PE_ML <- bind_rows(subset_DF2_PE_ML, sub_df2)
+subset_DF2_PE_ML <- subset_DF2_PE_ML[, 1:8]
+
+
+
+subset_DF3_PE_ML$Player <- subset_DF3_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_df3 <- which(gmm_df$z[, 3] > 0.1 & gmm_df$z[, 3] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_df3 <- subset_DF_PE[rows_df3, ]
+# 3. Add these rows to subset_DF1_PE_ML
+subset_DF3_PE_ML <- bind_rows(subset_DF3_PE_ML, sub_df3)
+subset_DF3_PE_ML <- subset_DF3_PE_ML[, 1:7]
+
+
+
+subset_DF4_PE_ML$Player <- subset_DF4_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_df4 <- which(gmm_df$z[, 4] > 0.1 & gmm_df$z[, 4] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_df4 <- subset_DF_PE[rows_df4, ]
+# 3. Add these rows to subset_DF1_PE_ML
+subset_DF4_PE_ML <- bind_rows(subset_DF4_PE_ML, sub_df4)
+subset_DF4_PE_ML <- subset_DF4_PE_ML[, 1:11]
+
+
+
+subset_DF5_PE_ML$Player <- subset_DF5_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_df5 <- which(gmm_df$z[, 5] > 0.1 & gmm_df$z[, 5] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_df5 <- subset_DF_PE[rows_df5, ]
+# 3. Add these rows to subset_DF1_PE_ML
+subset_DF5_PE_ML <- bind_rows(subset_DF5_PE_ML, sub_df5)
+subset_DF5_PE_ML <- subset_DF5_PE_ML[, 1:8]
+
+
+
+subset_DF6_PE_ML$Player <- subset_DF6_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_df6 <- which(gmm_df$z[, 6] > 0.1 & gmm_df$z[, 6] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_df6 <- subset_DF_PE[rows_df6, ]
+# 3. Add these rows to subset_DF1_PE_ML
+subset_DF6_PE_ML <- bind_rows(subset_DF6_PE_ML, sub_df6)
+subset_DF6_PE_ML <- subset_DF6_PE_ML[, 1:12]
+```
+
+```{r}
+subset_MF1_PE_ML$Player <- subset_MF1_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_mf1 <- which(gmm_mf$z[, 1] > 0.1 & gmm_mf$z[, 1] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_mf1 <- subset_MF_PE[rows_mf1, ]
+# 3. Add these rows to subset_DF1_PE_ML
+subset_MF1_PE_ML <- bind_rows(subset_MF1_PE_ML, sub_mf1)
+subset_MF1_PE_ML <- subset_MF1_PE_ML[, 1:11]
+
+
+
+subset_MF2_PE_ML$Player <- subset_MF2_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_mf2 <- which(gmm_mf$z[, 2] > 0.1 & gmm_mf$z[, 2] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_mf2 <- subset_MF_PE[rows_mf2, ]
+# 3. Add these rows to subset_MF2_PE_ML
+subset_MF2_PE_ML <- bind_rows(subset_MF2_PE_ML, sub_mf2)
+subset_MF2_PE_ML <- subset_MF2_PE_ML[, 1:10]
+
+
+
+subset_MF3_PE_ML$Player <- subset_MF3_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_mf3 <- which(gmm_mf$z[, 3] > 0.1 & gmm_mf$z[, 3] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_mf3 <- subset_MF_PE[rows_mf3, ]
+# 3. Add these rows to subset_MF3_PE_ML
+subset_MF3_PE_ML <- bind_rows(subset_MF3_PE_ML, sub_mf3)
+subset_MF3_PE_ML <- subset_MF3_PE_ML[, 1:11]
+
+
+
+subset_MF4_PE_ML$Player <- subset_MF4_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_mf4 <- which(gmm_mf$z[, 4] > 0.1 & gmm_mf$z[, 4] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_mf4 <- subset_MF_PE[rows_mf4, ]
+# 3. Add these rows to subset_MF4_PE_ML
+subset_MF4_PE_ML <- bind_rows(subset_MF4_PE_ML, sub_mf4)
+subset_MF4_PE_ML <- subset_MF4_PE_ML[, 1:11]
+
+
+
+subset_MF6b_PE_ML$Player <- subset_MF6_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_mf6 <- which(gmm_mf$z[, 6] > 0.1 & gmm_mf$z[, 6] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_mf6 <- subset_MF_PE[rows_mf6, ]
+# 3. Add these rows to subset_MF6_PE_ML
+subset_MF6b_PE_ML <- bind_rows(subset_MF6b_PE_ML, sub_mf6)
+subset_MF6b_PE_ML <- subset_MF6b_PE_ML[, 1:11]
+
+
+
+subset_MF7_PE_ML$Player <- subset_MF7_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_mf7 <- which(gmm_mf$z[, 7] > 0.1 & gmm_mf$z[, 7] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_mf7 <- subset_MF_PE[rows_mf7, ]
+# 3. Add these rows to subset_MF7_PE_ML
+subset_MF7_PE_ML <- bind_rows(subset_MF7_PE_ML, sub_mf7)
+subset_MF7_PE_ML <- subset_MF7_PE_ML[, 1:9]
+```
+
+```{r}
+subset_FW1_PE_ML$Player <- subset_FW1_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_fw1 <- which(gmm_fw$z[, 1] > 0.1 & gmm_fw$z[, 1] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_fw1 <- subset_FW_PE[rows_fw1, ]
+# 3. Add these rows to subset_FW1_PE_ML
+subset_FW1_PE_ML <- bind_rows(subset_FW1_PE_ML, sub_fw1)
+subset_FW1_PE_ML <- subset_FW1_PE_ML[, 1:8]
+
+
+
+subset_FW2_PE_ML$Player <- subset_FW2_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_fw2 <- which(gmm_fw$z[, 2] > 0.1 & gmm_fw$z[, 2] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_fw2 <- subset_FW_PE[rows_fw2, ]
+# 3. Add these rows to subset_FW2_PE_ML
+subset_FW2_PE_ML <- bind_rows(subset_FW2_PE_ML, sub_fw2)
+subset_FW2_PE_ML <- subset_FW2_PE_ML[, 1:11]
+
+
+
+subset_FW3_PE_ML$Player <- subset_FW3_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_fw3 <- which(gmm_fw$z[, 3] > 0.1 & gmm_fw$z[, 3] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_fw3 <- subset_FW_PE[rows_fw3, ]
+# 3. Add these rows to subset_FW3_PE_ML
+subset_FW3_PE_ML <- bind_rows(subset_FW3_PE_ML, sub_fw3)
+subset_FW3_PE_ML <- subset_FW3_PE_ML[, 1:9]
+
+
+
+subset_FW4_PE_ML$Player <- subset_FW4_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_fw4 <- which(gmm_fw$z[, 4] > 0.1 & gmm_fw$z[, 4] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_fw4 <- subset_FW_PE[rows_fw4, ]
+# 3. Add these rows to subset_FW4_PE_ML
+subset_FW4_PE_ML <- bind_rows(subset_FW4_PE_ML, sub_fw4)
+subset_FW4_PE_ML <- subset_FW4_PE_ML[, 1:16]
+
+
+
+subset_FW5_PE_ML$Player <- subset_FW5_PE$Player
+# 1. Identify the row numbers where the values are in the range (0.1, 0.5)
+rows_fw5 <- which(gmm_fw$z[, 5] > 0.1 & gmm_fw$z[, 5] < 0.5)
+# 2. Extract the relevant rows from subset_DF_PE
+sub_fw5 <- subset_FW_PE[rows_fw5, ]
+# 3. Add these rows to subset_FW5_PE_ML
+subset_FW5_PE_ML <- bind_rows(subset_FW5_PE_ML, sub_fw5)
+subset_FW5_PE_ML <- subset_FW5_PE_ML[, 1:20]
+```
+
+```{r}
+# For DF1 to DF7
+subset_DF1_PE_ML$DF1_rating_2 <- predict(DF1_model_step, newdata = subset_DF1_PE_ML)
+subset_DF2_PE_ML$DF2_rating_2 <- predict(DF2_model_step, newdata = subset_DF2_PE_ML)
+subset_DF3_PE_ML$DF3_rating_2 <- predict(DF3_model_step, newdata = subset_DF3_PE_ML)
+subset_DF4_PE_ML$DF4_rating_2 <- predict(DF4_model_step, newdata = subset_DF4_PE_ML)
+subset_DF5_PE_ML$DF5_rating_2 <- predict(DF5_model_step, newdata = subset_DF5_PE_ML)
+subset_DF6_PE_ML$DF6_rating_2 <- predict(DF6_model_step, newdata = subset_DF6_PE_ML)
+subset_DF7_PE_ML$DF7_rating_2 <- predict(DF7_model_step, newdata = subset_DF7_PE_ML)
+```
+
+```{r}
+# For MF1 to MF7
+subset_MF1_PE_ML$MF1_rating_2 <- predict(MF1_model_step, newdata = subset_MF1_PE_ML)
+subset_MF2_PE_ML$MF2_rating_2 <- predict(MF2_model_step, newdata = subset_MF2_PE_ML)
+subset_MF3_PE_ML$MF3_rating_2 <- predict(MF3_model_step, newdata = subset_MF3_PE_ML)
+subset_MF4_PE_ML$MF4_rating_2 <- predict(MF4_model_step, newdata = subset_MF4_PE_ML)
+subset_MF5_PE_ML$MF5_rating_2 <- predict(MF5_model_step, newdata = subset_MF5_PE_ML)
+subset_MF6b_PE_ML$MF6_rating_2 <- predict(MF6_model_step, newdata = subset_MF6b_PE_ML)
+subset_MF7_PE_ML$MF7_rating_2 <- predict(MF7_model_step, newdata = subset_MF7_PE_ML)
+```
+
+```{r}
+# For FW1 to FW5
+subset_FW1_PE_ML$FW1_rating_2 <- predict(FW1_model_step, newdata = subset_FW1_PE_ML)
+subset_FW2_PE_ML$FW2_rating_2 <- predict(FW2_model_step, newdata = subset_FW2_PE_ML)
+subset_FW3_PE_ML$FW3_rating_2 <- predict(FW3_model_step, newdata = subset_FW3_PE_ML)
+subset_FW4_PE_ML$FW4_rating_2 <- predict(FW4_model_step, newdata = subset_FW4_PE_ML)
+subset_FW5_PE_ML$FW5_rating_2 <- predict(FW5_model_step, newdata = subset_FW5_PE_ML)
+```
+
+```{r}
+#subset_DF7_PE_ML$Player <- subset_DF7_PE$Player
+#subset_MF5_PE_ML$Player <- subset_MF5_PE$Player
+```
+
+```{r}
+# For DF1 to DF7
+subset_DF1_PE_ML$DF1_rating <- predict(DF1_model, newdata = subset_DF1_PE_ML)
+subset_DF2_PE_ML$DF2_rating <- predict(DF2_model, newdata = subset_DF2_PE_ML)
+subset_DF3_PE_ML$DF3_rating <- predict(DF3_model, newdata = subset_DF3_PE_ML)
+subset_DF4_PE_ML$DF4_rating <- predict(DF4_model, newdata = subset_DF4_PE_ML)
+subset_DF5_PE_ML$DF5_rating <- predict(DF5_model, newdata = subset_DF5_PE_ML)
+subset_DF6_PE_ML$DF6_rating <- predict(DF6_model, newdata = subset_DF6_PE_ML)
+subset_DF7_PE_ML$DF7_rating <- predict(DF7_model, newdata = subset_DF7_PE_ML)
+```
+
+```{r}
+# For MF1 to MF7
+subset_MF1_PE_ML$MF1_rating <- predict(MF1_model, newdata = subset_MF1_PE_ML)
+subset_MF2_PE_ML$MF2_rating <- predict(MF2_model, newdata = subset_MF2_PE_ML)
+subset_MF3_PE_ML$MF3_rating <- predict(MF3_model, newdata = subset_MF3_PE_ML)
+subset_MF4_PE_ML$MF4_rating <- predict(MF4_model, newdata = subset_MF4_PE_ML)
+subset_MF5_PE_ML$MF5_rating <- predict(MF5_model, newdata = subset_MF5_PE_ML)
+subset_MF6b_PE_ML$MF6_rating <- predict(MF6_model, newdata = subset_MF6b_PE_ML)
+subset_MF7_PE_ML$MF7_rating <- predict(MF7_model, newdata = subset_MF7_PE_ML)
+```
+
+```{r}
+# For FW1 to FW5
+subset_FW1_PE_ML$FW1_rating <- predict(FW1_model, newdata = subset_FW1_PE_ML)
+subset_FW2_PE_ML$FW2_rating <- predict(FW2_model, newdata = subset_FW2_PE_ML)
+subset_FW3_PE_ML$FW3_rating <- predict(FW3_model, newdata = subset_FW3_PE_ML)
+subset_FW4_PE_ML$FW4_rating <- predict(FW4_model, newdata = subset_FW4_PE_ML)
+subset_FW5_PE_ML$FW5_rating <- predict(FW5_model, newdata = subset_FW5_PE_ML)
+```
+
+```{r}
+setwd("C:/Users/CNHenry/Desktop/Guide Notes/Dissertation/Datasets/23-24")
+write.csv(sub_clus_df, file = "Market Value 23-24.csv", row.names = FALSE)
+```
+
+```{r}
+setwd("C:/Users/CNHenry/Desktop/Guide Notes/Dissertation/Datasets/23-24")
+MV.23.24 <- read.csv("Market Value 23-24.csv")
+```
+
+```{r}
+# List of data frames to update with names
+dataframes_list <- list(
+  subset_DF1_PE_ML = subset_DF1_PE_ML,
+  subset_DF2_PE_ML = subset_DF2_PE_ML,
+  subset_DF3_PE_ML = subset_DF3_PE_ML,
+  subset_DF4_PE_ML = subset_DF4_PE_ML,
+  subset_DF5_PE_ML = subset_DF5_PE_ML,
+  subset_DF6_PE_ML = subset_DF6_PE_ML,
+  subset_DF7_PE_ML = subset_DF7_PE_ML,
+  subset_MF1_PE_ML = subset_MF1_PE_ML,
+  subset_MF2_PE_ML = subset_MF2_PE_ML,
+  subset_MF3_PE_ML = subset_MF3_PE_ML,
+  subset_MF4_PE_ML = subset_MF4_PE_ML,
+  subset_MF5_PE_ML = subset_MF5_PE_ML,
+  subset_MF6b_PE_ML = subset_MF6b_PE_ML,
+  subset_MF7_PE_ML = subset_MF7_PE_ML,
+  subset_FW1_PE_ML = subset_FW1_PE_ML,
+  subset_FW2_PE_ML = subset_FW2_PE_ML,
+  subset_FW3_PE_ML = subset_FW3_PE_ML,
+  subset_FW4_PE_ML = subset_FW4_PE_ML,
+  subset_FW5_PE_ML = subset_FW5_PE_ML
+)
+
+# Function to add Price column based on MV.23.24 dataframe
+add_price <- function(df) {
+  df %>% 
+    left_join(MV.23.24 %>% dplyr::select(Player, Price = MV_.euros.), by = "Player")
+}
+
+# Apply the function to all data frames and overwrite the original objects
+list2env(lapply(dataframes_list, add_price), envir = .GlobalEnv)
+```
+
+```{r}
+normalize_2 <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)) + 0.01)
+}
+```
+
+```{r}
+# Remove rows with NA values from subset_DF7_PE_ML
+subset_DF7_PE_ML <- na.omit(subset_DF7_PE_ML)
+
+```
+
+```{r}
+dataframes_list <- lapply(dataframes_list, function(df) {
+  # Create nor_rat and nor_rat_2
+  df$nor_rat <- normalize(df[[grep("_rating$", names(df))]])
+  df$nor_rat_2 <- normalize(df[[grep("_rating_2$", names(df))]])
+  
+  return(df)
+})
+
+list2env(dataframes_list, envir = .GlobalEnv)
+
+# Function to add Price column based on MV.23.24 dataframe
+add_price <- function(df) {
+  df %>% 
+    left_join(MV.23.24 %>% dplyr::select(Player, Price = MV_.euros.), by = "Player")
+}
+
+# Apply the function to all data frames and overwrite the original objects
+list2env(lapply(dataframes_list, add_price), envir = .GlobalEnv)
+
+```
+
+```{r}
+subset_DF1_PE_ML$P_nor <- normalize_2(subset_DF1_PE_ML$Price)
+subset_DF2_PE_ML$P_nor <- normalize_2(subset_DF2_PE_ML$Price)
+subset_DF3_PE_ML$P_nor <- normalize_2(subset_DF3_PE_ML$Price)
+subset_DF4_PE_ML$P_nor <- normalize_2(subset_DF4_PE_ML$Price)
+subset_DF5_PE_ML$P_nor <- normalize_2(subset_DF5_PE_ML$Price)
+subset_DF6_PE_ML$P_nor <- normalize_2(subset_DF6_PE_ML$Price)
+subset_DF7_PE_ML$P_nor <- normalize_2(subset_DF7_PE_ML$Price)
+subset_MF1_PE_ML$P_nor <- normalize_2(subset_MF1_PE_ML$Price)
+subset_MF2_PE_ML$P_nor <- normalize_2(subset_MF2_PE_ML$Price)
+subset_MF3_PE_ML$P_nor <- normalize_2(subset_MF3_PE_ML$Price)
+subset_MF4_PE_ML$P_nor <- normalize_2(subset_MF4_PE_ML$Price)
+subset_MF5_PE_ML$P_nor <- normalize_2(subset_MF5_PE_ML$Price)
+subset_MF6b_PE_ML$P_nor <- normalize_2(subset_MF6b_PE_ML$Price)
+subset_MF7_PE_ML$P_nor <- normalize_2(subset_MF7_PE_ML$Price)
+subset_FW1_PE_ML$P_nor <- normalize_2(subset_FW1_PE_ML$Price)
+subset_FW2_PE_ML$P_nor <- normalize_2(subset_FW2_PE_ML$Price)
+subset_FW3_PE_ML$P_nor <- normalize_2(subset_FW3_PE_ML$Price)
+subset_FW4_PE_ML$P_nor <- normalize_2(subset_FW4_PE_ML$Price)
+subset_FW5_PE_ML$P_nor <- normalize_2(subset_FW5_PE_ML$Price)
+```
+
+```{r}
+subset_DF1_PE_ML$ROI <- (subset_DF1_PE_ML$nor_rat / subset_DF1_PE_ML$P_nor) * 100
+subset_DF2_PE_ML$ROI <- (subset_DF2_PE_ML$nor_rat / subset_DF2_PE_ML$P_nor) * 100
+subset_DF3_PE_ML$ROI <- (subset_DF3_PE_ML$nor_rat / subset_DF3_PE_ML$P_nor) * 100
+subset_DF4_PE_ML$ROI <- (subset_DF4_PE_ML$nor_rat / subset_DF4_PE_ML$P_nor) * 100
+subset_DF5_PE_ML$ROI <- (subset_DF5_PE_ML$nor_rat / subset_DF5_PE_ML$P_nor) * 100
+subset_DF6_PE_ML$ROI <- (subset_DF6_PE_ML$nor_rat / subset_DF6_PE_ML$P_nor) * 100
+subset_DF7_PE_ML$ROI <- (subset_DF7_PE_ML$nor_rat / subset_DF7_PE_ML$P_nor) * 100
+subset_MF1_PE_ML$ROI <- (subset_MF1_PE_ML$nor_rat / subset_MF1_PE_ML$P_nor) * 100
+subset_MF2_PE_ML$ROI <- (subset_MF2_PE_ML$nor_rat / subset_MF2_PE_ML$P_nor) * 100
+subset_MF3_PE_ML$ROI <- (subset_MF3_PE_ML$nor_rat / subset_MF3_PE_ML$P_nor) * 100
+subset_MF4_PE_ML$ROI <- (subset_MF4_PE_ML$nor_rat / subset_MF4_PE_ML$P_nor) * 100
+subset_MF5_PE_ML$ROI <- (subset_MF5_PE_ML$nor_rat / subset_MF5_PE_ML$P_nor) * 100
+subset_MF6b_PE_ML$ROI <- (subset_MF6b_PE_ML$nor_rat / subset_MF6b_PE_ML$P_nor) * 100
+subset_MF7_PE_ML$ROI <- (subset_MF7_PE_ML$nor_rat / subset_MF7_PE_ML$P_nor) * 100
+subset_FW1_PE_ML$ROI <- (subset_FW1_PE_ML$nor_rat / subset_FW1_PE_ML$P_nor) * 100
+subset_FW2_PE_ML$ROI <- (subset_FW2_PE_ML$nor_rat / subset_FW2_PE_ML$P_nor) * 100
+subset_FW3_PE_ML$ROI <- (subset_FW3_PE_ML$nor_rat / subset_FW3_PE_ML$P_nor) * 100
+subset_FW4_PE_ML$ROI <- (subset_FW4_PE_ML$nor_rat / subset_FW4_PE_ML$P_nor) * 100
+subset_FW5_PE_ML$ROI <- (subset_FW5_PE_ML$nor_rat / subset_FW5_PE_ML$P_nor) * 100
+```
+
+```{r}
+subset_DF1_PE_ML$ROI_2 <- (subset_DF1_PE_ML$nor_rat_2 / subset_DF1_PE_ML$P_nor) * 100
+subset_DF2_PE_ML$ROI_2 <- (subset_DF2_PE_ML$nor_rat_2 / subset_DF2_PE_ML$P_nor) * 100
+subset_DF3_PE_ML$ROI_2 <- (subset_DF3_PE_ML$nor_rat_2 / subset_DF3_PE_ML$P_nor) * 100
+subset_DF4_PE_ML$ROI_2 <- (subset_DF4_PE_ML$nor_rat_2 / subset_DF4_PE_ML$P_nor) * 100
+subset_DF5_PE_ML$ROI_2 <- (subset_DF5_PE_ML$nor_rat_2 / subset_DF5_PE_ML$P_nor) * 100
+subset_DF6_PE_ML$ROI_2 <- (subset_DF6_PE_ML$nor_rat_2 / subset_DF6_PE_ML$P_nor) * 100
+subset_DF7_PE_ML$ROI_2 <- (subset_DF7_PE_ML$nor_rat_2 / subset_DF7_PE_ML$P_nor) * 100
+subset_MF1_PE_ML$ROI_2 <- (subset_MF1_PE_ML$nor_rat_2 / subset_MF1_PE_ML$P_nor) * 100
+subset_MF2_PE_ML$ROI_2 <- (subset_MF2_PE_ML$nor_rat_2 / subset_MF2_PE_ML$P_nor) * 100
+subset_MF3_PE_ML$ROI_2 <- (subset_MF3_PE_ML$nor_rat_2 / subset_MF3_PE_ML$P_nor) * 100
+subset_MF4_PE_ML$ROI_2 <- (subset_MF4_PE_ML$nor_rat_2 / subset_MF4_PE_ML$P_nor) * 100
+subset_MF5_PE_ML$ROI_2 <- (subset_MF5_PE_ML$nor_rat_2 / subset_MF5_PE_ML$P_nor) * 100
+subset_MF6b_PE_ML$ROI_2 <- (subset_MF6b_PE_ML$nor_rat_2 / subset_MF6b_PE_ML$P_nor) * 100
+subset_MF7_PE_ML$ROI_2 <- (subset_MF7_PE_ML$nor_rat_2 / subset_MF7_PE_ML$P_nor) * 100
+subset_FW1_PE_ML$ROI_2 <- (subset_FW1_PE_ML$nor_rat_2 / subset_FW1_PE_ML$P_nor) * 100
+subset_FW2_PE_ML$ROI_2 <- (subset_FW2_PE_ML$nor_rat_2 / subset_FW2_PE_ML$P_nor) * 100
+subset_FW3_PE_ML$ROI_2 <- (subset_FW3_PE_ML$nor_rat_2 / subset_FW3_PE_ML$P_nor) * 100
+subset_FW4_PE_ML$ROI_2 <- (subset_FW4_PE_ML$nor_rat_2 / subset_FW4_PE_ML$P_nor) * 100
+subset_FW5_PE_ML$ROI_2 <- (subset_FW5_PE_ML$nor_rat_2 / subset_FW5_PE_ML$P_nor) * 100
+
+```
+
+```{r}
+lapply(datasets, calculate_and_rank_correlations)
+```
